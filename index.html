@@ -1,0 +1,2311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>QA & D-SAT System</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+/* ── Platinumlist Brand Theme ─────────────────────────────── */
+:root {
+  --brand:        #6B00EE;   /* Platinumlist vivid purple      */
+  --brand-dark:   #4A00BB;   /* Darker purple                  */
+  --brand-mid:    #8822F8;   /* Mid purple hover               */
+  --brand-light:  #A655FF;   /* Lighter purple                 */
+  --accent:       #4DD9FF;   /* Platinumlist cyan              */
+  --accent-hover: #1AC4F0;
+  --accent-light: #e5f9ff;
+  --success:      #0ca678;
+  --sidebar-w:    244px;
+  --radius:       10px;
+  --shadow-sm:    0 1px 4px rgba(107,0,238,.12);
+  --shadow:       0 2px 10px rgba(107,0,238,.15);
+}
+
+/* ── Base ─────────────────────────────────────────────────── */
+body { font-size:.92rem; background:#f0f1f9; font-family:'Segoe UI',system-ui,sans-serif; color:#1a1a2e; }
+
+/* ── Sidebar ──────────────────────────────────────────────── */
+#sidebar {
+  width:var(--sidebar-w); min-height:100vh; position:fixed; top:0; left:0; z-index:100;
+  background:linear-gradient(180deg, #4A00BB 0%, #6B00EE 60%, #7B11F5 100%);
+  display:flex; flex-direction:column;
+  box-shadow:3px 0 20px rgba(107,0,238,.45);
+}
+#sidebar .brand {
+  padding:16px 14px; background:rgba(0,0,0,.25);
+  color:var(--accent); font-weight:800; font-size:.95rem;
+  border-bottom:1px solid rgba(77,217,255,.2);
+  display:flex; align-items:center; gap:10px;
+}
+#sidebar .brand .pl-logo {
+  width:34px; height:34px; background:var(--accent);
+  border-radius:8px; display:flex; align-items:center; justify-content:center;
+  color:var(--brand); font-weight:900; font-size:.9rem; flex-shrink:0;
+  box-shadow:0 2px 10px rgba(77,217,255,.5);
+}
+#sidebar .brand-name { line-height:1.2; }
+#sidebar .brand-sub { display:block; font-size:.62rem; color:rgba(77,217,255,.6); font-weight:400; letter-spacing:.06em; text-transform:uppercase; margin-top:1px; }
+#sidebar .nav-section { padding:14px 14px 3px; font-size:.63rem; color:rgba(255,255,255,.3); text-transform:uppercase; letter-spacing:.09em; font-weight:700; }
+#sidebar .nav-link {
+  color:rgba(255,255,255,.65); padding:9px 14px; display:flex; align-items:center;
+  gap:8px; border-left:3px solid transparent; transition:.15s; font-size:.87rem;
+}
+#sidebar .nav-link:hover  { background:rgba(77,217,255,.1); color:#fff; border-left-color:rgba(77,217,255,.5); }
+#sidebar .nav-link.active { background:rgba(77,217,255,.2); color:#fff; border-left-color:var(--accent); font-weight:600; }
+#sidebar .nav-link i { font-size:.9rem; width:17px; text-align:center; opacity:.85; }
+#sidebar .nav-link.active i { color:var(--accent); opacity:1; }
+#sidebar .sidebar-footer { margin-top:auto; padding:14px; border-top:1px solid rgba(255,255,255,.07); }
+
+/* ── Main content ─────────────────────────────────────────── */
+#main { margin-left:var(--sidebar-w); padding:26px; min-height:100vh; }
+.tab-pane { display:none; } .tab-pane.active { display:block; }
+.page-title { font-size:1.3rem; font-weight:700; color:var(--brand); margin-bottom:20px; display:flex; align-items:center; gap:8px; }
+.page-title i { color:var(--accent); }
+
+/* ── Cards ────────────────────────────────────────────────── */
+.card-m { border:none; border-radius:var(--radius); background:#fff; box-shadow:var(--shadow-sm); }
+.card-accent { border-top:3px solid var(--accent); }
+.card-purple { border-top:3px solid var(--brand-light); }
+
+/* ── Tables ───────────────────────────────────────────────── */
+table th { font-weight:600; font-size:.79rem; text-transform:uppercase; letter-spacing:.04em; color:#555; }
+.param-row:hover { background:#faf8ff; }
+.agent-row:hover  { background:#f8f9fa; }
+
+/* ── Searchable dropdown ──────────────────────────────────── */
+.srch-wrap { position:relative; }
+.srch-input { border-radius:6px; width:100%; }
+.srch-list { position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #ced4da; border-top:none; border-radius:0 0 6px 6px; max-height:220px; overflow-y:auto; z-index:999; display:none; box-shadow:var(--shadow); }
+.srch-list .srch-item { padding:8px 12px; cursor:pointer; font-size:.9rem; }
+.srch-list .srch-item:hover { background:var(--accent-light); }
+.srch-list .srch-empty { padding:8px 12px; color:#aaa; font-style:italic; font-size:.88rem; }
+
+/* ── Score display ────────────────────────────────────────── */
+.score-big { font-size:2.7rem; font-weight:800; line-height:1; }
+.sticky-score { position:sticky; bottom:0; background:#fff; border-top:3px solid var(--accent); padding:14px 20px; z-index:50; box-shadow:0 -3px 12px rgba(0,0,0,.1); }
+.fatal-section { background:#fff5f5; border-left:3px solid #e03131; }
+.score-pill { display:inline-block; min-width:54px; text-align:center; padding:3px 9px; border-radius:20px; font-weight:700; font-size:.84rem; }
+.score-green  { background:#d3f9d8; color:#1a7431; }
+.score-yellow { background:#fff3cd; color:#9c6f00; }
+.score-red    { background:#ffe3e3; color:#c0392b; }
+.score-black  { background:#2c2c3e; color:#fff; }
+
+/* ── Badges ───────────────────────────────────────────────── */
+.badge-nailed  { background:var(--success); color:#fff; }
+.badge-almost  { background:#e8a020; color:#fff; }
+.badge-notquite{ background:#c0392b; color:#fff; }
+.badge-ko      { background:#1a1a2e; color:#fff; }
+
+/* ── Buttons ──────────────────────────────────────────────── */
+.btn-accent       { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+.btn-accent:hover { background:var(--accent-hover); border-color:var(--accent-hover); color:#fff; }
+.btn-brand        { background:var(--brand); border-color:var(--brand); color:#fff; font-weight:600; }
+.btn-brand:hover  { background:var(--brand-mid); border-color:var(--brand-mid); color:#fff; }
+
+/* ── Stat cards ───────────────────────────────────────────── */
+.stat-card { border-radius:var(--radius); background:#fff; box-shadow:var(--shadow-sm); padding:16px; text-align:center; }
+.stat-card .stat-val { font-size:2rem; font-weight:800; line-height:1.1; }
+.stat-card .stat-lbl { font-size:.75rem; color:#6c757d; text-transform:uppercase; letter-spacing:.05em; margin-top:4px; }
+.stat-card-purple { border-top:3px solid var(--brand-light); }
+.stat-card-gold   { border-top:3px solid var(--accent); }
+.stat-card-green  { border-top:3px solid var(--success); }
+.stat-card-red    { border-top:3px solid #e03131; }
+
+/* ── Rank medals ──────────────────────────────────────────── */
+.rank-1 { color:#b7950b; font-weight:700; }
+.rank-2 { color:#5d6d7e; font-weight:600; }
+.rank-3 { color:#784212; font-weight:600; }
+
+/* ── Misc ─────────────────────────────────────────────────── */
+textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-height:400px; }
+.val-panel { background:#f4f0ff; border:2px solid var(--brand-light); border-radius:var(--radius); padding:20px; margin-top:10px; }
+.version-badge { display:inline-block; background:var(--brand); color:var(--accent); border-radius:20px; padding:3px 10px; font-size:.75rem; font-weight:700; letter-spacing:.04em; }
+.changelog-item { border-left:3px solid var(--accent); padding:8px 12px; margin-bottom:8px; background:#fff; border-radius:0 6px 6px 0; box-shadow:var(--shadow-sm); }
+.changelog-item .ch-version { font-weight:700; color:var(--brand); font-size:.88rem; }
+.changelog-item .ch-date { font-size:.76rem; color:#888; margin-left:8px; }
+.changelog-item .ch-by { font-size:.76rem; color:var(--brand-light); font-weight:600; }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div id="sidebar">
+  <div class="brand">
+    <div class="pl-logo">PL</div>
+    <div class="brand-name">
+      Platinumlist
+      <span class="brand-sub">QA &amp; D-SAT System</span>
+    </div>
+  </div>
+  <nav class="nav flex-column mt-1">
+    <div class="nav-section">Quality Assurance</div>
+    <a class="nav-link active" href="#" data-tab="qa-entry">   <i class="bi bi-pencil-square"></i> QA Entry</a>
+    <a class="nav-link"        href="#" data-tab="dsat-import"><i class="bi bi-upload"></i> D-SAT Import</a>
+    <a class="nav-link"        href="#" data-tab="dsat-queue"> <i class="bi bi-list-check"></i> Validation Queue</a>
+    <div class="nav-section">Analytics</div>
+    <a class="nav-link"        href="#" data-tab="agent-view"> <i class="bi bi-person-lines-fill"></i> Agent View</a>
+    <a class="nav-link"        href="#" data-tab="manager">    <i class="bi bi-bar-chart-line"></i> Manager Dashboard</a>
+    <a class="nav-link"        href="#" data-tab="coaching">   <i class="bi bi-envelope-paper"></i> Coaching Email</a>
+    <div class="nav-section">Admin</div>
+    <a class="nav-link"        href="#" data-tab="agents-mgr"> <i class="bi bi-people"></i> Manage Agents</a>
+    <a class="nav-link"        href="#" data-tab="settings">   <i class="bi bi-gear"></i> Settings</a>
+  </nav>
+  <div class="sidebar-footer">
+    <div id="conn-status" class="small text-warning">Connecting...</div>
+    <div class="small mt-1" style="color:rgba(255,255,255,.25);font-size:.68rem">v2.1 · GCC Team</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+<!-- ═══════════════════════════════════════════ TAB 1: QA ENTRY -->
+<div class="tab-pane active" id="tab-qa-entry">
+  <h4 class="mb-3"><i class="bi bi-pencil-square me-2 text-primary"></i>New QA Evaluation</h4>
+
+  <div class="card card-m p-3 mb-3">
+    <div class="row g-3">
+
+      <!-- Agent searchable -->
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">Agent <span class="text-danger">*</span></label>
+        <div class="srch-wrap">
+          <input type="text" id="qa-agent-input" class="srch-input form-control" placeholder="Type agent name..." autocomplete="off" onkeyup="filterDropdown('qa-agent-input','qa-agent-list','qa-agent-val')" onfocus="openDropdown('qa-agent-list')" onblur="closeDropdownDelay('qa-agent-list')"/>
+          <input type="hidden" id="qa-agent-val"/>
+          <div class="srch-list" id="qa-agent-list"></div>
+        </div>
+      </div>
+
+      <!-- Date -->
+      <div class="col-md-2">
+        <label class="form-label fw-semibold">Date <span class="text-danger">*</span></label>
+        <input type="date" id="qa-date" class="form-control" onchange="checkTxCount()"/>
+      </div>
+
+      <!-- Channel -->
+      <div class="col-md-2">
+        <label class="form-label fw-semibold">Channel</label>
+        <select id="qa-channel" class="form-select">
+          <option value="Chat">Chat</option>
+          <option value="Call">Call</option>
+          <option value="Email">Email</option>
+        </select>
+      </div>
+
+      <!-- Ticket ID -->
+      <div class="col-md-2">
+        <label class="form-label fw-semibold">Conversation ID / Call No.</label>
+        <input type="text" id="qa-ticket" class="form-control" placeholder="e.g. 21547..."/>
+      </div>
+
+      <!-- Interaction Reason searchable -->
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">Interaction Reason</label>
+        <div class="srch-wrap">
+          <input type="text" id="qa-reason-input" class="srch-input form-control" placeholder="Type to search reason..." autocomplete="off" onkeyup="filterDropdown('qa-reason-input','qa-reason-list','qa-reason-val')" onfocus="openDropdown('qa-reason-list')" onblur="closeDropdownDelay('qa-reason-list')"/>
+          <input type="hidden" id="qa-reason-val"/>
+          <div class="srch-list" id="qa-reason-list"></div>
+        </div>
+      </div>
+
+
+      <!-- TX status -->
+      <div class="col-12">
+        <div id="qa-tx-status" class="small text-muted"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk fill -->
+  <div class="card card-m p-2 mb-3 d-flex flex-row align-items-center gap-3 flex-wrap">
+    <span class="fw-semibold ms-2">Fill all regular parameters at once:</span>
+    <select id="qa-bulk" class="form-select form-select-sm w-auto">
+      <option value="">-- Pick rating --</option>
+      <option value="excellent">Excellent (max)</option>
+      <option value="fair">Fair (mid)</option>
+      <option value="poor">Poor (0)</option>
+    </select>
+    <button class="btn btn-sm btn-outline-primary" onclick="applyBulk()">
+      <i class="bi bi-arrow-down-square me-1"></i>Apply to All Regular
+    </button>
+  </div>
+
+  <!-- Parameters table -->
+  <div class="card card-m p-0 mb-5">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th style="width:40%">Parameter</th>
+            <th style="width:13%">Criticality</th>
+            <th style="width:18%">Rating</th>
+            <th style="width:7%">Score</th>
+            <th>Note</th>
+          </tr>
+        </thead>
+        <tbody id="param-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Sticky score bar -->
+  <div class="sticky-score d-flex align-items-center gap-4">
+    <div><div class="text-muted small">Score (excl. KO)</div><div class="score-big text-primary" id="live-total">—</div></div>
+    <div><div class="text-muted small">Final Score</div><div class="score-big" id="live-final">—</div></div>
+    <div id="live-label"></div>
+    <div class="ms-auto d-flex gap-2">
+      <button class="btn btn-success px-4" onclick="submitQA()"><i class="bi bi-save2 me-1"></i>Save Transaction</button>
+      <button class="btn btn-outline-secondary" onclick="resetQA()"><i class="bi bi-arrow-counterclockwise me-1"></i>Reset</button>
+    </div>
+  </div>
+  <div id="qa-alert" class="mt-3"></div>
+
+  <div class="card card-m mt-3 mb-4" id="past-tx-card">
+    <div class="card-header d-flex justify-content-between align-items-center" style="cursor:pointer;background:#fdf3e3;border-radius:10px 10px 0 0;" onclick="togglePastTx()">
+      <span class="fw-bold"><i class="bi bi-clock-history me-2 text-warning"></i>Past Transactions -- View / Edit / Delete</span>
+      <i class="bi bi-chevron-down" id="past-tx-chevron"></i>
+    </div>
+    <div id="past-tx-body" class="card-body p-0" style="display:none;">
+      <div class="p-3 border-bottom bg-light d-flex gap-2 align-items-end flex-wrap">
+        <div>
+          <label class="form-label fw-semibold small">Agent</label>
+          <select id="ptx-agent" class="form-select form-select-sm" style="min-width:160px"><option value="">-- Select --</option></select>
+        </div>
+        <div>
+          <label class="form-label fw-semibold small">Month</label>
+          <select id="ptx-month" class="form-select form-select-sm"><option>January</option><option>February</option><option>March</option><option>April</option><option>May</option><option>June</option><option>July</option><option>August</option><option>September</option><option>October</option><option>November</option><option>December</option></select>
+        </div>
+        <div>
+          <label class="form-label fw-semibold small">Year</label>
+          <input type="number" id="ptx-year" class="form-control form-control-sm" style="width:90px"/>
+        </div>
+        <button class="btn btn-sm btn-warning" onclick="loadPastTx()"><i class="bi bi-search me-1"></i>Load</button>
+      </div>
+      <div id="past-tx-list" class="p-3"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ TAB 2: D-SAT IMPORT -->
+<div class="tab-pane" id="tab-dsat-import">
+  <h4 class="mb-3"><i class="bi bi-upload me-2 text-warning"></i>D-SAT CSV Import</h4>
+
+  <div class="card card-m p-4 mb-4">
+    <!-- Step 1 -->
+    <div class="mb-4">
+      <div class="fw-bold mb-2"><span class="badge bg-primary me-2">1</span>Upload your Intercom CSV file</div>
+      <input type="file" id="csv-file" class="form-control" accept=".csv" style="max-width:400px" onchange="handleCSV(this)"/>
+      <div class="text-muted small mt-1">Export from Intercom → Reports → CSAT → Download CSV</div>
+    </div>
+
+    <!-- Step 2: column mapping -->
+    <div id="step2" class="d-none mb-4">
+      <div class="fw-bold mb-3"><span class="badge bg-primary me-2">2</span>Tell the system which column in your CSV matches each field</div>
+
+      <!-- Manual date — at top, very visible, not mandatory -->
+      <div class="card border-primary mb-3 p-3" style="background:#f0f7ff;border-radius:8px;">
+        <div class="fw-semibold mb-1"><i class="bi bi-calendar-date me-2 text-primary"></i>Date of these D-SATs <span class="text-muted fw-normal small">(optional — leave blank to skip)</span></div>
+        <div class="text-muted small mb-2">Type the date manually. This will be saved for all imported rows from this file.</div>
+        <input type="date" id="manual-import-date" class="form-control" style="max-width:220px"/>
+      </div>
+
+      <div class="alert alert-info py-2 small mb-3">
+        <i class="bi bi-info-circle me-1"></i>Each dropdown shows the column names found in your CSV. Select the correct one for each field.
+      </div>
+      <div class="row g-3" id="col-map-area"></div>
+
+      <button class="btn btn-outline-primary mt-3" onclick="previewFiltered()">
+        <i class="bi bi-funnel me-1"></i>Preview D-SAT rows (rating 1, 2, 3 only)
+      </button>
+    </div>
+
+    <!-- Step 3: preview -->
+    <div id="step3" class="d-none mb-4">
+      <div class="fw-bold mb-2"><span class="badge bg-primary me-2">3</span>Review rows to import</div>
+      <div id="csv-preview-area"></div>
+      <div class="mt-3 d-flex gap-2">
+        <button class="btn btn-warning px-4" onclick="submitImport()"><i class="bi bi-cloud-upload me-1"></i>Import These D-SATs</button>
+        <button class="btn btn-outline-secondary" onclick="resetImport()">Start over</button>
+      </div>
+    </div>
+
+    <div id="import-result"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ TAB 3: VALIDATION QUEUE -->
+<div class="tab-pane" id="tab-dsat-queue">
+  <h4 class="mb-3"><i class="bi bi-list-check me-2 text-danger"></i>D-SAT Validation Queue</h4>
+
+  <div class="row g-2 mb-2 align-items-end">
+    <div class="col-auto">
+      <label class="form-label fw-semibold">Month</label>
+      <select id="q-month" class="form-select" style="width:140px"><option value="">-- All --</option><option>January</option><option>February</option><option>March</option><option>April</option><option>May</option><option>June</option><option>July</option><option>August</option><option>September</option><option>October</option><option>November</option><option>December</option></select>
+    </div>
+    <div class="col-auto">
+      <label class="form-label fw-semibold">Year</label>
+      <input type="number" id="q-year" class="form-control" style="width:100px"/>
+    </div>
+    <div class="col-auto pt-4">
+      <button class="btn btn-danger" onclick="loadQueue()"><i class="bi bi-search me-1"></i>Load Queue</button>
+    </div>
+    <div class="col-auto pt-4">
+      <button class="btn btn-outline-secondary" onclick="loadAllQueue()"><i class="bi bi-list-ul me-1"></i>Show All</button>
+    </div>
+    <div class="col-auto pt-4">
+      <button class="btn btn-outline-primary btn-sm" onclick="openIntercomSettings()" title="Set Intercom Workspace ID"><i class="bi bi-gear me-1"></i>Intercom</button>
+    </div>
+    <div class="col-auto pt-4">
+      <button class="btn btn-outline-danger btn-sm" onclick="confirmRebuildSheet()" title="Fix sheet headers if columns are wrong"><i class="bi bi-wrench me-1"></i>Fix Sheet</button>
+    </div>
+    <div class="col-auto pt-4">
+      <button class="btn btn-success" id="save-all-btn" onclick="saveAllPending()" title="Save all filled validation cards at once"><i class="bi bi-save2 me-1"></i>Save All Filled</button>
+    </div>
+  </div>
+  <div class="col-12 mb-2"><div id="queue-stats"></div></div>
+
+  <div class="alert alert-warning py-2 small">
+    <i class="bi bi-exclamation-triangle me-1"></i>
+    After validating each case: go to Intercom → open the chat → add the tag <strong>"invalid d-sat"</strong> (if invalid) or write your coaching note (if valid).
+  </div>
+
+  <div id="queue-list" class="mt-3"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════ TAB 4: AGENT VIEW -->
+<div class="tab-pane" id="tab-agent-view">
+  <h4 class="mb-3"><i class="bi bi-person-lines-fill me-2 text-info"></i>Agent Monthly View</h4>
+  <div class="row g-2 mb-4 align-items-end">
+    <div class="col-auto">
+      <label class="form-label fw-semibold">Agent</label>
+      <select id="av-agent" class="form-select" style="min-width:180px"><option value="">-- Select --</option></select>
+    </div>
+    <div class="col-auto">
+      <label class="form-label fw-semibold">Month</label>
+      <select id="av-month" class="form-select"><option>January</option><option>February</option><option>March</option><option>April</option><option>May</option><option>June</option><option>July</option><option>August</option><option>September</option><option>October</option><option>November</option><option>December</option></select>
+    </div>
+    <div class="col-auto">
+      <label class="form-label fw-semibold">Year</label>
+      <input type="number" id="av-year" class="form-control" style="width:100px"/>
+    </div>
+    <div class="col-auto pt-4">
+      <button class="btn btn-info text-white" onclick="loadAgentView()"><i class="bi bi-eye me-1"></i>Load</button>
+    </div>
+    <div class="col-auto pt-4">
+      <button class="btn btn-outline-secondary d-none" id="av-coach-btn" onclick="goToCoaching()"><i class="bi bi-envelope-paper me-1"></i>Generate Coaching Email</button>
+    </div>
+  </div>
+  <div id="agent-view-content"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════ TAB 5: MANAGER DASHBOARD -->
+<div class="tab-pane" id="tab-manager">
+  <h4 class="mb-3"><i class="bi bi-bar-chart-line me-2 text-success"></i>Manager Dashboard</h4>
+  <div class="row g-2 mb-4 align-items-end">
+    <div class="col-auto">
+      <label class="form-label fw-semibold">Month</label>
+      <select id="m-month" class="form-select"><option>January</option><option>February</option><option>March</option><option>April</option><option>May</option><option>June</option><option>July</option><option>August</option><option>September</option><option>October</option><option>November</option><option>December</option></select>
+    </div>
+    <div class="col-auto">
+      <label class="form-label fw-semibold">Year</label>
+      <input type="number" id="m-year" class="form-control" style="width:100px"/>
+    </div>
+    <div class="col-auto pt-4">
+      <button class="btn btn-success" onclick="loadDashboard()"><i class="bi bi-bar-chart me-1"></i>Load Dashboard</button>
+    </div>
+  </div>
+  <div id="dashboard-content"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════ TAB 6: COACHING EMAIL -->
+<div class="tab-pane" id="tab-coaching">
+  <h4 class="mb-3"><i class="bi bi-envelope-paper me-2"></i>Coaching Email Generator</h4>
+  <div class="row g-2 mb-4 align-items-end">
+    <div class="col-auto">
+      <label class="form-label fw-semibold">Agent</label>
+      <select id="ce-agent" class="form-select" style="min-width:180px"><option value="">-- Select --</option></select>
+    </div>
+    <div class="col-auto">
+      <label class="form-label fw-semibold">Month</label>
+      <select id="ce-month" class="form-select"><option>January</option><option>February</option><option>March</option><option>April</option><option>May</option><option>June</option><option>July</option><option>August</option><option>September</option><option>October</option><option>November</option><option>December</option></select>
+    </div>
+    <div class="col-auto">
+      <label class="form-label fw-semibold">Year</label>
+      <input type="number" id="ce-year" class="form-control" style="width:100px"/>
+    </div>
+    <div class="col-auto pt-4">
+      <button class="btn btn-secondary" onclick="generateCoaching()"><i class="bi bi-magic me-1"></i>Generate</button>
+    </div>
+  </div>
+  <div id="coaching-out" class="d-none">
+    <div class="mb-3"><label class="form-label fw-semibold">Subject</label><input type="text" id="ce-subject" class="form-control"/></div>
+    <div class="mb-3"><label class="form-label fw-semibold">Email Body <span class="text-muted small">(editable before sending)</span></label><textarea id="ce-body" class="form-control email-body"></textarea></div>
+    <div class="d-flex gap-2 mb-2">
+      <button class="btn btn-outline-primary" onclick="copyEmail()"><i class="bi bi-clipboard me-1"></i>Copy</button>
+      <button class="btn btn-outline-danger" onclick="openGmail()"><i class="bi bi-envelope me-1"></i>Open in Gmail</button>
+    </div>
+    <div id="ce-sheetlink" class="small text-muted mt-1"></div>
+    <div id="copy-ok" class="text-success small d-none mt-1"><i class="bi bi-check-circle me-1"></i>Copied!</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ TAB 7: MANAGE AGENTS -->
+<div class="tab-pane" id="tab-agents-mgr">
+  <h4 class="mb-3"><i class="bi bi-people me-2"></i>Manage Agents</h4>
+
+  <!-- Add Agent form -->
+  <div class="card card-m p-3 mb-4">
+    <h6 class="fw-bold mb-3">Add New Agent</h6>
+    <div class="row g-2">
+      <div class="col-md-3"><label class="form-label fw-semibold small">Agent Name <span class="text-danger">*</span></label><input type="text" id="new-agent-name" class="form-control form-control-sm" placeholder="Full name"/></div>
+      <div class="col-md-3"><label class="form-label fw-semibold small">Email</label><input type="email" id="new-agent-email" class="form-control form-control-sm" placeholder="name@company.com"/></div>
+      <div class="col-md-3"><label class="form-label fw-semibold small">Scorecard Link</label><input type="text" id="new-agent-link" class="form-control form-control-sm" placeholder="Google Sheets URL"/></div>
+      <div class="col-md-2 pt-4"><button class="btn btn-primary btn-sm w-100" onclick="addAgent()"><i class="bi bi-person-plus me-1"></i>Add Agent</button></div>
+    </div>
+    <div id="agent-add-result" class="mt-2"></div>
+  </div>
+
+  <!-- Agent list -->
+  <div class="card card-m p-0">
+    <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+      <h6 class="fw-bold mb-0">Current Agents</h6>
+      <button class="btn btn-sm btn-outline-secondary" onclick="loadAgentsList()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>
+    </div>
+    <div id="agents-list-content" class="p-3">
+      <div class="text-muted small">Click Refresh to load agents from the sheet.</div>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS TAB -->
+<div class="tab-pane" id="tab-settings">
+  <h4 class="page-title"><i class="bi bi-gear"></i>Settings</h4>
+
+  <div class="row g-3">
+    <!-- Coordinator Info -->
+    <div class="col-md-6">
+      <div class="card card-m card-accent p-3">
+        <h6 class="fw-bold mb-3"><i class="bi bi-person-badge me-2 text-warning"></i>Coordinator Info</h6>
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">Your Name <span class="text-muted fw-normal">(used in email signature &amp; Done By)</span></label>
+          <input type="text" id="s-coord-name" class="form-control"/>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">Your Title</label>
+          <input type="text" id="s-coord-title" class="form-control"/>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">Max Transactions per Agent per Month</label>
+          <input type="number" id="s-max-tx" class="form-control" style="max-width:120px" min="1" max="20"/>
+          <div class="text-muted small mt-1">Default is 8. Agents with fewer transactions (on leave etc.) will still be calculated based on actual evaluations only.</div>
+        </div>
+        <button class="btn btn-accent" onclick="saveSettingsForm()"><i class="bi bi-save me-1"></i>Save Settings</button>
+        <div id="s-save-result" class="mt-2"></div>
+      </div>
+    </div>
+
+    <!-- Done By Names -->
+    <div class="col-md-6">
+      <div class="card card-m card-accent p-3">
+        <h6 class="fw-bold mb-3"><i class="bi bi-person-lines-fill me-2 text-warning"></i>Done By / Coached By Names</h6>
+        <div class="text-muted small mb-2">These names appear as suggestions in the Done By and Coached By fields. Add your team members here.</div>
+        <div id="s-names-list" class="mb-3"></div>
+        <div class="d-flex gap-2">
+          <input type="text" id="s-new-name" class="form-control form-control-sm" placeholder="Add name..." style="max-width:200px"/>
+          <button class="btn btn-sm btn-accent" onclick="addSettingsName()"><i class="bi bi-plus-lg me-1"></i>Add</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Export Data -->
+    <div class="col-12">
+      <div class="card card-m p-3">
+        <h6 class="fw-bold mb-3"><i class="bi bi-download me-2 text-warning"></i>Export Data</h6>
+        <div class="row g-2 align-items-center">
+          <div class="col-auto">
+            <div class="d-flex gap-1">
+              <button class="btn btn-outline-primary" onclick="exportCSV('QATransactions')"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Export QA Transactions</button>
+              <a class="btn btn-outline-secondary btn-sm" href="https://docs.google.com/spreadsheets/d/1i7In8QeQ4s0BIujCGj_Ct0A3x-63YQovnYKxATo-poU/edit#gid=0" target="_blank" title="Open QA Transactions in Google Sheets"><i class="bi bi-box-arrow-up-right"></i></a>
+            </div>
+          </div>
+          <div class="col-auto">
+            <div class="d-flex gap-1">
+              <button class="btn btn-outline-danger" onclick="exportCSV('DSATImports')"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Export D-SAT Imports</button>
+              <a class="btn btn-outline-secondary btn-sm" href="https://docs.google.com/spreadsheets/d/1i7In8QeQ4s0BIujCGj_Ct0A3x-63YQovnYKxATo-poU" target="_blank" title="Open Google Sheet"><i class="bi bi-box-arrow-up-right"></i></a>
+            </div>
+          </div>
+          <div class="col-auto">
+            <div class="d-flex gap-1">
+              <button class="btn btn-outline-success" onclick="exportCSV('DSATValidations')"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Export D-SAT Validations</button>
+              <a class="btn btn-outline-secondary btn-sm" href="https://docs.google.com/spreadsheets/d/1i7In8QeQ4s0BIujCGj_Ct0A3x-63YQovnYKxATo-poU" target="_blank" title="Open Google Sheet"><i class="bi bi-box-arrow-up-right"></i></a>
+            </div>
+          </div>
+        </div>
+        <div class="text-muted small mt-2">CSV exports download to your computer. The <i class="bi bi-box-arrow-up-right"></i> button opens the live Google Sheet directly.</div>
+      </div>
+    </div>
+
+    <!-- Version & Changelog -->
+    <div class="col-12">
+      <div class="card card-m p-3 card-purple">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <h6 class="fw-bold mb-0"><i class="bi bi-info-circle me-2" style="color:var(--brand-light)"></i>System Info &amp; Changelog</h6>
+          <span class="version-badge">v2.1.0</span>
+        </div>
+        <div class="changelog-item">
+          <span class="ch-version">v2.1.0</span><span class="ch-date">April 2026</span>
+          <span class="ch-by ms-2"><i class="bi bi-person-fill me-1"></i>QA Team</span>
+          <div class="small text-muted mt-1">Platinumlist brand redesign · Remove conversation (redo) · Manager totals · Export open-in-sheet buttons · Save All in validation queue · Transaction Type moved to validation cards · Chart height fix · Manual C-SAT input per agent</div>
+        </div>
+        <div class="changelog-item">
+          <span class="ch-version">v2.0.0</span><span class="ch-date">March 2026</span>
+          <span class="ch-by ms-2"><i class="bi bi-person-fill me-1"></i>QA Team</span>
+          <div class="small text-muted mt-1">Full rebuild: QA Entry · D-SAT Import &amp; Validation Queue · Agent View · Manager Dashboard · Coaching Email · Settings · Edit/Delete transactions</div>
+        </div>
+        <div class="mt-3 small text-muted">
+          <strong>Built for:</strong> Platinumlist GCC Team &nbsp;|&nbsp;
+          <strong>Sheet:</strong> <a href="https://docs.google.com/spreadsheets/d/1i7In8QeQ4s0BIujCGj_Ct0A3x-63YQovnYKxATo-poU" target="_blank">Open Google Sheet <i class="bi bi-box-arrow-up-right"></i></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<!-- ═══════════════════════════════════════════ EDIT AGENT MODAL -->
+<div class="modal fade" id="editAgentModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Edit Agent</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-agent-row"/>
+      <div class="mb-3"><label class="form-label fw-semibold">Agent Name</label><input type="text" id="edit-agent-name" class="form-control"/></div>
+      <div class="mb-3"><label class="form-label fw-semibold">Email</label><input type="email" id="edit-agent-email" class="form-control"/></div>
+      <div class="mb-3"><label class="form-label fw-semibold">Scorecard Link</label><input type="text" id="edit-agent-link" class="form-control"/></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAgentEdit()">Save Changes</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- Agent names datalist for Done By / Coached By inputs -->
+<datalist id="agent-names-datalist"></datalist>
+
+<!-- Intercom Settings Modal -->
+<div class="modal fade" id="intercomSettingsModal" tabindex="-1">
+  <div class="modal-dialog modal-sm"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title"><i class="bi bi-gear me-1"></i>Intercom Settings</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <label class="form-label fw-semibold small">Intercom Workspace ID</label>
+      <input type="text" id="intercom-wid-input" class="form-control form-control-sm" placeholder="e.g. abc1d2ef"/>
+      <div class="text-muted small mt-1">Find it in your Intercom URL:<br/><code>app.intercom.com/a/apps/<strong>[THIS PART]</strong>/...</code></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary btn-sm" onclick="saveIntercomSettings()">Save</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- Edit Validation Modal -->
+<div class="modal fade" id="editValModal" tabindex="-1">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header bg-warning"><h5 class="modal-title fw-bold">Edit Validation</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="ev-dsat-id"/>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold small">Responsible *</label>
+          <select class="form-select" id="ev-resp" onchange="toggleEvIssue()">
+            <option value="">-- Select --</option>
+            <option value="Agent">Agent (valid)</option>
+            <option value="Customer">Customer (invalid)</option>
+            <option value="Process">Process (invalid)</option>
+            <option value="Technology">Technology (invalid)</option>
+          </select>
+        </div>
+        <div class="col-md-4" id="ev-issue-wrap" style="display:none">
+          <label class="form-label fw-semibold small">Agent Issue Type *</label>
+          <select class="form-select" id="ev-issue"></select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold small">Done By</label>
+          <input type="text" list="agent-names-datalist" class="form-control" id="ev-done"/>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold small">Coached By</label>
+          <input type="text" list="agent-names-datalist" class="form-control" id="ev-coached"/>
+        </div>
+        <div class="col-md-8">
+          <label class="form-label fw-semibold small">Actionable Steps</label>
+          <textarea class="form-control" id="ev-actions" rows="2"></textarea>
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-semibold small">Additional Notes</label>
+          <textarea class="form-control" id="ev-notes" rows="2"></textarea>
+        </div>
+      </div>
+      <div id="ev-result" class="mt-2"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      <button class="btn btn-warning fw-bold" onclick="saveEditValidation()"><i class="bi bi-save me-1"></i>Save Changes</button>
+    </div>
+  </div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// --- CONFIGURATION ---------------------------------------
+// Uses google.script.run -- no URL needed, no CORS issues.
+// This works ONLY when the page is opened via the deployed Web App URL.
+
+// --- STATE -----------------------------------------------
+var _agents=[], _reasons=[], _issueTypes=[], _params=[];
+var _csvRaw=[], _csvHeaders=[], _filteredRows=[];
+var _pendingQ=[], _allImports=[], _allVals=[];
+var _dashChart1=null, _dashChart2=null;
+
+// --- INIT ------------------------------------------------
+// setupSidebar runs FIRST via event delegation -- works even if setDefaults/loadInitialData throw.
+// Event delegation on #sidebar means it survives any render order issues.
+document.addEventListener("click", function(e){
+  var link = e.target.closest("#sidebar .nav-link");
+  if(!link) return;
+  e.preventDefault();
+  document.querySelectorAll("#sidebar .nav-link").forEach(function(l){ l.classList.remove("active"); });
+  link.classList.add("active");
+  var tab = link.dataset.tab;
+  if(!tab) return;
+  document.querySelectorAll(".tab-pane").forEach(function(p){ p.classList.remove("active"); });
+  var pane = document.getElementById("tab-"+tab);
+  if(pane) pane.classList.add("active");
+});
+
+document.addEventListener("DOMContentLoaded",function(){
+  try{ setDefaults(); }catch(err){ console.error("setDefaults:", err); }
+  try{ loadInitialData(); }catch(err){ console.error("loadInitialData:", err); }
+});
+
+function setDefaults(){
+  var now=new Date(), y=now.getFullYear(), m=now.getMonth();
+  var months=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  var qa=document.getElementById("qa-date"); if(qa) qa.value=now.toISOString().slice(0,10);
+  ["q-month","av-month","m-month","ce-month"].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value=months[m];
+  });
+  ["q-year","av-year","m-year","ce-year"].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value=y;
+  });
+}
+
+// kept as named function for any direct calls elsewhere
+function setupSidebar(){
+  // navigation is handled by the document-level event delegation above
+}
+
+// ─────────────────────────────────────────────────────────────
+// SCRIPT_URL: paste your Apps Script deployment URL here when
+// hosting on GitHub Pages. Leave empty when served via Apps Script.
+// ─────────────────────────────────────────────────────────────
+var SCRIPT_URL = "";
+
+function api(action, payload){
+  // ── Inside Apps Script web app: use google.script.run (fastest, no CORS)
+  if(typeof google !== "undefined" && google.script && google.script.run){
+    return new Promise(function(resolve, reject){
+      google.script.run
+        .withSuccessHandler(function(result){
+          if(!result || !result.success) reject(new Error((result && result.error) || "Unknown error"));
+          else resolve(result.data);
+        })
+        .withFailureHandler(function(err){
+          reject(new Error(err.message || "Script execution failed"));
+        })
+        .handleClientRequest(JSON.stringify({ action: action, payload: payload || {} }));
+    });
+  }
+  // ── External hosting (GitHub Pages etc.): use fetch → doPost
+  if(!SCRIPT_URL){
+    return Promise.reject(new Error(
+      "SCRIPT_URL is not set. Open index.html and paste your Apps Script deployment URL into the SCRIPT_URL variable at the top of the <script> block."
+    ));
+  }
+  // Use text/plain to avoid CORS preflight — Apps Script accepts it fine
+  return fetch(SCRIPT_URL, {
+    method:  "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body:    JSON.stringify({ action: action, payload: payload || {} })
+  })
+  .then(function(r){
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  })
+  .then(function(result){
+    if(!result || !result.success) throw new Error((result && result.error) || "Unknown error");
+    return result.data;
+  });
+}
+
+// --- LOAD INITIAL DATA -----------------------------------
+function setConnStatus(msg, cls){
+  var el=document.getElementById("conn-status");
+  if(el){ el.className="small "+cls; el.textContent=msg; }
+}
+function loadInitialData(){
+  setConnStatus("Loading data...","text-info");
+  Promise.all([api("getAgents"), api("getInteractionReasons"), api("getIssueTypes"), api("getParameters")])
+  .then(function(res){
+    _agents=res[0]||[]; _reasons=res[1]||[]; _issueTypes=res[2]||[]; _params=res[3]||[];
+    buildAgentDropdowns();
+    buildReasonDropdown();
+    buildParamTable();
+    buildTxTypeDropdown();
+    buildPtxAgentDropdown();
+    loadSettings();
+    setConnStatus("Connected -- "+_agents.length+" agents loaded","text-success");
+  }).catch(function(err){
+    setConnStatus("Error: "+err.message,"text-danger");
+  });
+}
+
+// --- SEARCHABLE DROPDOWN SYSTEM --------------------------
+// Each searchable dropdown has: input (display), hidden input (value), list div
+var _dropdownData = {}; // key -> [{label, value}]
+
+function registerDropdown(inputId, listId, hiddenId, items){
+  _dropdownData[listId] = items;
+  renderDropdownList(listId, hiddenId, items, "");
+}
+
+function renderDropdownList(listId, hiddenId, items, query){
+  var list = document.getElementById(listId);
+  if(!list) return;
+  list.innerHTML="";
+  var q = query.toLowerCase();
+  var filtered = q ? items.filter(function(i){ return i.label.toLowerCase().includes(q); }) : items;
+  if(filtered.length===0){
+    list.innerHTML='<div class="srch-empty">No results</div>';
+    return;
+  }
+  filtered.forEach(function(item){
+    var div=document.createElement("div");
+    div.className="srch-item";
+    div.textContent=item.label;
+    div.onmousedown=function(){ // mousedown fires before blur
+      document.getElementById(hiddenId).value=item.value;
+      document.getElementById(listId.replace("-list","-input")).value=item.label;
+      document.getElementById(listId).style.display="none";
+      // trigger tx count check if this is agent
+      if(hiddenId==="qa-agent-val") checkTxCount();
+    };
+    list.appendChild(div);
+  });
+}
+
+function filterDropdown(inputId, listId, hiddenId){
+  var q = document.getElementById(inputId).value;
+  if(!q){ document.getElementById(hiddenId).value=""; }
+  var items = _dropdownData[listId]||[];
+  renderDropdownList(listId, hiddenId, items, q);
+  document.getElementById(listId).style.display="block";
+}
+
+function openDropdown(listId){
+  document.getElementById(listId).style.display="block";
+}
+function closeDropdownDelay(listId){
+  setTimeout(function(){ var el=document.getElementById(listId); if(el) el.style.display="none"; },200);
+}
+
+function buildAgentDropdowns(){
+  // Searchable for QA entry
+  var items = _agents.map(function(a){
+    var n=a["Agent name"]||a.agent_name||""; return {label:n, value:n};
+  }).filter(function(i){ return i.label; });
+  registerDropdown("qa-agent-input","qa-agent-list","qa-agent-val", items);
+
+  // Regular select for other tabs
+  ["av-agent","ce-agent"].forEach(function(id){
+    var sel=document.getElementById(id);
+    sel.innerHTML='<option value="">-- Select Agent --</option>';
+    items.forEach(function(item){
+      var opt=document.createElement("option");
+      opt.value=item.value; opt.textContent=item.label;
+      sel.appendChild(opt);
+    });
+  });
+
+  // Datalist for Done By / Coached By inputs in validation cards
+  var dl=document.getElementById("agent-names-datalist");
+  if(dl){
+    dl.innerHTML=items.map(function(i){
+      return '<option value="'+i.label+'">';
+    }).join("");
+  }
+}
+
+function buildReasonDropdown(){
+  var items = _reasons.map(function(r){
+    var v=r["Interaction Reason"]||r.interaction_reason||""; return {label:v, value:v};
+  }).filter(function(i){ return i.label; });
+  registerDropdown("qa-reason-input","qa-reason-list","qa-reason-val", items);
+}
+
+// --- QA PARAMETER TABLE ----------------------------------
+function buildParamTable(){
+  var tbody=document.getElementById("param-tbody");
+  tbody.innerHTML="";
+  var fatalDone=false;
+
+  _params.forEach(function(p){
+    if(p.type==="fatal"&&!fatalDone){
+      fatalDone=true;
+      var hr=document.createElement("tr");
+      hr.innerHTML='<td colspan="5" class="fatal-section fw-bold text-danger py-2 ps-3"><i class="bi bi-exclamation-octagon-fill me-1"></i>Fatal Error Parameters — scoring K.O on any = Auto Fail (score 0)</td>';
+      tbody.appendChild(hr);
+    }
+    var tr=document.createElement("tr");
+    tr.className="param-row"+(p.type==="fatal"?" fatal-section":"");
+    var critCls=p.criticality==="Business-Critical"?"danger":p.criticality==="Customer-Critical"?"primary":"secondary";
+    tr.innerHTML=
+      '<td class="align-middle py-2 ps-3">'+p.name+' <small class="text-muted fw-normal">('+p.max+' pts)</small></td>'+
+      '<td class="align-middle"><span class="badge bg-'+critCls+' bg-opacity-75">'+p.criticality+'</span></td>'+
+      '<td class="align-middle">'+buildRatingSelect(p)+'</td>'+
+      '<td class="align-middle fw-bold" id="sc-'+p.id+'">—</td>'+
+      '<td class="align-middle"><input type="text" class="form-control form-control-sm param-note" data-pid="'+p.id+'" placeholder="Note (optional)"/></td>';
+    tbody.appendChild(tr);
+  });
+}
+
+function buildRatingSelect(p){
+  var sel='<select class="form-select form-select-sm param-sel" data-pid="'+p.id+'" onchange="onRate(this)">';
+  sel+='<option value="">Select...</option>';
+  if(p.type==="fatal"){
+    sel+='<option value="1">Nailed It! ✓</option>';
+    sel+='<option value="0">K.O ✗</option>';
+  } else if(p.type==="binary"){
+    sel+='<option value="'+p.max+'">Yes ('+p.max+')</option>';
+    sel+='<option value="0">No (0)</option>';
+  } else {
+    // regular: 3-option [0, mid, max]
+    var opts=p.options;
+    sel+='<option value="'+opts[opts.length-1]+'">Excellent ('+opts[opts.length-1]+')</option>';
+    if(opts.length>=3) sel+='<option value="'+opts[1]+'">Fair ('+opts[1]+')</option>';
+    sel+='<option value="0">Poor (0)</option>';
+  }
+  sel+='</select>';
+  return sel;
+}
+
+function onRate(sel){
+  var pid=sel.dataset.pid;
+  var sc=document.getElementById("sc-"+pid);
+  sc.textContent = sel.value===""?"—":sel.value;
+  updateLive();
+}
+
+function updateLive(){
+  var tot=0, ko=false;
+  (_params||[]).forEach(function(p){
+    var sel=document.querySelector('.param-sel[data-pid="'+p.id+'"]');
+    if(!sel||sel.value==="") return;
+    var v=Number(sel.value);
+    if(p.type==="regular"||p.type==="binary") tot+=v;
+    else if(p.type==="fatal"&&v===0) ko=true;
+  });
+  tot=Math.round(tot*100)/100;
+  var fin=ko?0:tot;
+  document.getElementById("live-total").textContent=tot;
+  var fe=document.getElementById("live-final"), le=document.getElementById("live-label");
+  fe.textContent=fin;
+  if(ko){ fe.style.color="#000"; le.innerHTML='<span class="badge badge-ko fs-6">K.O — Auto Fail</span>'; }
+  else if(fin>=90){ fe.style.color="#1e8449"; le.innerHTML='<span class="badge badge-nailed fs-6">Nailed It!</span>'; }
+  else if(fin>=80){ fe.style.color="#b7950b"; le.innerHTML='<span class="badge badge-almost fs-6">Almost There!</span>'; }
+  else { fe.style.color="#c0392b"; le.innerHTML='<span class="badge badge-notquite fs-6">Not Quite There!</span>'; }
+}
+
+function applyBulk(){
+  var v=document.getElementById("qa-bulk").value;
+  if(!v) return;
+  (_params||[]).filter(function(p){ return p.type==="regular"; }).forEach(function(p){
+    var sel=document.querySelector('.param-sel[data-pid="'+p.id+'"]');
+    if(!sel) return;
+    var opts=p.options;
+    var val = v==="excellent"?opts[opts.length-1] : v==="fair"?(opts.length>=3?opts[1]:0) : 0;
+    sel.value=val;
+    document.getElementById("sc-"+p.id).textContent=val;
+  });
+  updateLive();
+}
+
+function checkTxCount(){
+  var agent=document.getElementById("qa-agent-val").value;
+  var date=document.getElementById("qa-date").value;
+  if(!agent||!date) return;
+  var months=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  var d=new Date(date), month=months[d.getMonth()], year=d.getFullYear();
+  api("getQATransactions",{agentName:agent,month:month,year:String(year)}).then(function(txs){
+    var n=txs.length;
+    var el=document.getElementById("qa-tx-status");
+    if(n>=8) el.innerHTML='<span class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>Max reached: '+n+'/8 transactions for '+agent+' in '+month+' '+year+'</span>';
+    else el.innerHTML='<span class="text-info"><i class="bi bi-info-circle me-1"></i>Next transaction: <strong>T'+(n+1)+'</strong> of 8 for <strong>'+agent+'</strong> in '+month+' '+year+'</span>';
+  }).catch(function(){});
+}
+
+document.addEventListener("change",function(e){
+  if(e.target.id==="qa-date") checkTxCount();
+});
+
+function submitQA(){
+  var agent=document.getElementById("qa-agent-val").value;
+  var date=document.getElementById("qa-date").value;
+  if(!agent){ alert("Select an agent first."); return; }
+  if(!date){  alert("Select a date."); return; }
+
+  var ratings={}, notes={}, incomplete=false;
+  (_params||[]).forEach(function(p){
+    var sel=document.querySelector('.param-sel[data-pid="'+p.id+'"]');
+    var note=document.querySelector('.param-note[data-pid="'+p.id+'"]');
+    if(!sel) return;
+    if(sel.value===""){incomplete=true;return;}
+    ratings[p.id]=Number(sel.value);
+    if(note&&note.value) notes[p.id]=note.value;
+  });
+  if(incomplete){ alert("Please rate ALL parameters before saving."); return; }
+
+  var txTypeVal = document.getElementById("qa-txtype-val") ? document.getElementById("qa-txtype-val").value : "";
+  var payload = {
+    agent_name:agent, date:date,
+    channel:document.getElementById("qa-channel").value,
+    ticket_id:document.getElementById("qa-ticket").value,
+    interaction_reason:document.getElementById("qa-reason-val").value,
+    ratings:ratings, notes:notes,
+    transaction_type: txTypeVal
+  };
+
+  // Check if editing an existing transaction
+  if(window._editingQaId) {
+    payload.qa_id = window._editingQaId;
+    payload.saved_by = "";
+    showAlert("qa-alert","info","Updating...");
+    api("updateQATransaction", payload).then(function(r){
+      showAlert("qa-alert","success",
+        '<i class="bi bi-check-circle me-1"></i>Updated! Score: <strong>'+r.final_score+'</strong> -- '+r.rating_label+
+        (r.has_ko?' <span class="badge bg-dark">K.O</span>':'')+
+        ' &nbsp;<button class="btn btn-sm btn-outline-success" onclick="cancelEditTx()">Done Editing</button>');
+      window._editingQaId = null;
+      var btn = document.querySelector('#tab-qa-entry .btn-warning');
+      if(btn) { btn.textContent = "Save Transaction"; btn.className = btn.className.replace("btn-warning","btn-success"); }
+      checkTxCount();
+    }).catch(function(err){ showAlert("qa-alert","danger","Error: "+err.message); });
+  } else {
+    showAlert("qa-alert","info","Saving...");
+    api("saveQATransaction", payload).then(function(r){
+      showAlert("qa-alert","success",
+        '<i class="bi bi-check-circle me-1"></i>Saved! <strong>T'+r.transaction_no+'</strong> -- Score: <strong>'+r.final_score+'</strong> -- '+r.rating_label+
+        (r.has_ko?' <span class="badge bg-dark">K.O</span>':'')+
+        ' &nbsp;<button class="btn btn-sm btn-outline-success" onclick="resetQA()">New Evaluation</button>');
+      checkTxCount();
+    }).catch(function(err){ showAlert("qa-alert","danger","Error: "+err.message); });
+  }
+}
+
+function resetQA(){
+  document.getElementById("qa-agent-input").value="";
+  document.getElementById("qa-agent-val").value="";
+  document.getElementById("qa-date").value=new Date().toISOString().slice(0,10);
+  document.getElementById("qa-ticket").value="";
+  document.getElementById("qa-reason-input").value="";
+  document.getElementById("qa-reason-val").value="";
+  document.getElementById("qa-tx-status").innerHTML="";
+  document.getElementById("qa-alert").innerHTML="";
+  document.getElementById("live-total").textContent="--";
+  document.getElementById("live-final").textContent="--";
+  document.getElementById("live-label").innerHTML="";
+  document.querySelectorAll(".param-sel").forEach(function(s){ s.value=""; });
+  document.querySelectorAll('[id^="sc-"]').forEach(function(s){ s.textContent="--"; });
+  document.querySelectorAll(".param-note").forEach(function(n){ n.value=""; });
+  window._editingQaId = null;
+  if(document.getElementById("qa-txtype-input")) document.getElementById("qa-txtype-input").value="";
+  if(document.getElementById("qa-txtype-val")) document.getElementById("qa-txtype-val").value="";
+  var saveBtn = document.querySelector('#tab-qa-entry .btn-warning, #tab-qa-entry .btn-success');
+  if(saveBtn && saveBtn.classList.contains("btn-warning")) { saveBtn.textContent="Save Transaction"; saveBtn.className=saveBtn.className.replace("btn-warning","btn-success"); }
+}
+
+// --- CSV IMPORT ------------------------------------------
+// Date is now a manual input -- removed from FIELD_DEFS
+var FIELD_DEFS = [
+  { key:"chat_id",          label:"Chat / Conversation ID", required:true,  hint:"Unique ID of the Intercom chat" },
+  { key:"agent_name",       label:"Agent Name",             required:true,  hint:"Name of the agent assigned to the chat" },
+  { key:"rating",           label:"CSAT Rating (1–5)",      required:true,  hint:"The customer rating score. Only 1,2,3 will be imported." },
+  { key:"transaction_type", label:"Transaction Type / Tag", required:false, hint:"Category or tag of the conversation (optional)" }
+];
+
+var GUESS_MAP = {
+  chat_id:          ["Conversation ID","Chat ID","conversation_id","id","ID","Conversation id"],
+  agent_name:       ["Teammate rated","Teammate Rated","Assigned to","Agent Name","Assignee","agent","agent_name","Assignee name"],
+  rating:           ["Conversation rating","CSAT Rating","Rating","Score","rating","csat_rating","CSAT score"],
+  date:             ["Created at","Date","Received at","created_at","date","Conversation created at"],
+  transaction_type: ["Agent rated type","Tag","Tags","Type","Transaction Type","conversation_tag","Category"]
+};
+
+function handleCSV(input){
+  var file=input.files[0]; if(!file) return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    var text=ev.target.result;
+    var rows=parseCSV(text);
+    if(rows.length<2){ alert("CSV is empty or invalid."); return; }
+    _csvHeaders=rows[0];
+    _csvRaw=rows.slice(1).map(function(r){
+      var o={}; _csvHeaders.forEach(function(h,i){ o[h]=(r[i]||"").trim(); }); return o;
+    });
+    buildColMapUI();
+    document.getElementById("step2").classList.remove("d-none");
+    document.getElementById("step3").classList.add("d-none");
+    document.getElementById("import-result").innerHTML="";
+  };
+  reader.readAsText(file,"utf-8");
+}
+
+function parseCSV(text){
+  // Handle BOM
+  if(text.charCodeAt(0)===0xFEFF) text=text.slice(1);
+  var rows=[], lines=text.split(/\r?\n/);
+  lines.forEach(function(line){
+    if(!line.trim()) return;
+    var row=[], inQ=false, cur="";
+    for(var i=0;i<line.length;i++){
+      var ch=line[i];
+      if(ch==='"'){ inQ=!inQ; }
+      else if(ch===','&&!inQ){ row.push(cur.trim()); cur=""; }
+      else cur+=ch;
+    }
+    row.push(cur.trim());
+    rows.push(row);
+  });
+  return rows;
+}
+
+function buildColMapUI(){
+  var area=document.getElementById("col-map-area");
+  area.innerHTML="";
+  FIELD_DEFS.forEach(function(f){
+    var guessed=guessCol(f.key);
+    var html='<div class="col-md-4">'+
+      '<label class="form-label fw-semibold small">'+(f.required?'<span class="text-danger">*</span> ':'')+f.label+'</label>'+
+      '<div class="text-muted small mb-1">'+f.hint+'</div>'+
+      '<select class="form-select form-select-sm" id="map-'+f.key+'">'+
+        '<option value="">'+(f.required?'-- Select column --':'-- Not in CSV (skip) --')+'</option>';
+    _csvHeaders.forEach(function(h){
+      html+='<option value="'+h+'"'+(h===guessed?' selected':'')+'>'+h+'</option>';
+    });
+    html+='</select></div>';
+    area.innerHTML+=html;
+  });
+}
+
+function guessCol(field){
+  var candidates=GUESS_MAP[field]||[];
+  for(var i=0;i<candidates.length;i++){
+    for(var j=0;j<_csvHeaders.length;j++){
+      if(_csvHeaders[j].toLowerCase().trim()===candidates[i].toLowerCase().trim()) return _csvHeaders[j];
+    }
+  }
+  // partial match
+  for(var i=0;i<candidates.length;i++){
+    for(var j=0;j<_csvHeaders.length;j++){
+      if(_csvHeaders[j].toLowerCase().includes(candidates[i].toLowerCase())) return _csvHeaders[j];
+    }
+  }
+  return "";
+}
+
+function previewFiltered(){
+  var ratingCol = document.getElementById("map-rating").value;
+  var chatCol   = document.getElementById("map-chat_id").value;
+  var agentCol  = document.getElementById("map-agent_name").value;
+  var manualDate= document.getElementById("manual-import-date").value;
+
+  if(!ratingCol || !chatCol || !agentCol){
+    alert("Please map Chat ID, Agent Name, and Rating columns before previewing.");
+    return;
+  }
+  // Date is optional -- if blank, it will be saved as empty
+
+  _filteredRows = _csvRaw.filter(function(r){
+    var num = normalizeRatingValue(r[ratingCol]);
+    return !isNaN(num) && num>=1 && num<=3;
+  });
+
+  if(_filteredRows.length===0){
+    document.getElementById("step3").classList.add("d-none");
+    var sample=[...new Set(_csvRaw.map(function(r){ return r[ratingCol]; }))].slice(0,10).join(", ");
+    document.getElementById("import-result").innerHTML=
+      '<div class="alert alert-warning mt-3"><i class="bi bi-exclamation-triangle me-1"></i>'+
+      'No D-SAT rows (rating 1, 2, 3) found in column "<strong>'+ratingCol+'</strong>".<br/>'+
+      '<small>Values found in that column: <strong>'+sample+'</strong></small><br/>'+
+      '<small class="text-muted">If ratings appear as words (e.g. "Sad", "Bad"), the system still handles them. Check you selected the correct rating column.</small></div>';
+    return;
+  }
+
+  var typeCol = document.getElementById("map-transaction_type").value;
+  var thead = '<tr><th>Agent Name</th><th>Chat ID</th><th>Rating</th><th>Date</th><th>Type</th></tr>';
+  var tbody = "";
+  _filteredRows.slice(0,20).forEach(function(r){
+    var rating=normalizeRatingValue(r[ratingCol]);
+    var cls=rating===1?"danger":rating===2?"warning":"info";
+    tbody+='<tr>'+
+      '<td>'+r[agentCol]+'</td>'+
+      '<td class="small text-muted">'+r[chatCol]+'</td>'+
+      '<td><span class="badge bg-'+cls+'">'+rating+'</span></td>'+
+      '<td>'+manualDate+'</td>'+
+      '<td class="small">'+(typeCol?r[typeCol]:"—")+'</td>'+
+      '</tr>';
+  });
+  if(_filteredRows.length>20)
+    tbody+='<tr><td colspan="5" class="text-center text-muted small">...and '+(_filteredRows.length-20)+' more rows</td></tr>';
+
+  document.getElementById("csv-preview-area").innerHTML=
+    '<div class="alert alert-success py-2 small mb-2"><i class="bi bi-check-circle me-1"></i>'+
+    '<strong>'+_filteredRows.length+'</strong> D-SAT rows found (rating 1–3) from '+_csvRaw.length+' total. Date: <strong>'+manualDate+'</strong></div>'+
+    '<div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light">'+thead+'</thead><tbody>'+tbody+'</tbody></table></div>';
+
+  document.getElementById("step3").classList.remove("d-none");
+  document.getElementById("import-result").innerHTML="";
+}
+
+function submitImport(){
+  var m={};
+  FIELD_DEFS.forEach(function(f){ m[f.key]=document.getElementById("map-"+f.key).value; });
+  var manualDate = document.getElementById("manual-import-date").value;
+  // If no date entered, default to today so month/year are always saved correctly
+  var effectiveDate = manualDate || new Date().toISOString().slice(0,10);
+
+  var rows=_filteredRows.map(function(r){
+    return {
+      chat_id:          (r[m.chat_id]||"").trim(),
+      agent_name:       (r[m.agent_name]||"").trim(),
+      rating:           normalizeRatingValue(r[m.rating]),
+      date:             effectiveDate,
+      transaction_type: m.transaction_type ? (r[m.transaction_type]||"").trim() : ""
+    };
+  });
+  document.getElementById("import-result").innerHTML='<div class="alert alert-info mt-3">Importing '+rows.length+' records...</div>';
+  api("importDSAT",{rows:rows}).then(function(res){
+    var months=["January","February","March","April","May","June","July","August","September","October","November","December"];
+    var d = new Date(effectiveDate);
+    var importedMonth = months[d.getMonth()];
+    var importedYear  = d.getFullYear();
+    document.getElementById("import-result").innerHTML=
+      '<div class="alert alert-success mt-3">'+
+      '<i class="bi bi-check-circle me-1"></i><strong>'+res.imported+'</strong> D-SATs imported. <strong>'+res.skipped+'</strong> skipped (duplicates).<br/>'+
+      '<hr class="my-2"/>'+
+      '<strong>Next step:</strong> Go to the <strong>Validation Queue</strong> to validate each case.<br/>'+
+      'Set: <strong>Responsible</strong>, <strong>Agent Issue Type</strong>, <strong>Actionable Steps</strong> and more.<br/>'+
+      '<button class="btn btn-sm btn-danger mt-2" onclick="goToQueue(\''+importedMonth+'\',\''+importedYear+'\')">'+
+      '<i class="bi bi-list-check me-1"></i>Go to Validation Queue → '+importedMonth+' '+importedYear+'</button>'+
+      '</div>';
+    document.getElementById("step2").classList.add("d-none");
+    document.getElementById("step3").classList.add("d-none");
+    document.getElementById("csv-file").value="";
+    _filteredRows=[]; _csvRaw=[];
+  }).catch(function(err){
+    document.getElementById("import-result").innerHTML='<div class="alert alert-danger mt-3">Import failed: '+err.message+'</div>';
+  });
+}
+
+function resetImport(){
+  document.getElementById("step2").classList.add("d-none");
+  document.getElementById("step3").classList.add("d-none");
+  document.getElementById("import-result").innerHTML="";
+  document.getElementById("csv-file").value="";
+  _filteredRows=[]; _csvRaw=[];
+}
+
+function goToQueue(month, year){
+  // Switch to Validation Queue tab and pre-fill month/year
+  document.querySelectorAll("#sidebar .nav-link").forEach(function(l){ l.classList.remove("active"); });
+  document.querySelector('[data-tab="dsat-queue"]').classList.add("active");
+  document.querySelectorAll(".tab-pane").forEach(function(p){ p.classList.remove("active"); });
+  document.getElementById("tab-dsat-queue").classList.add("active");
+  if(month) document.getElementById("q-month").value=month;
+  if(year)  document.getElementById("q-year").value=year;
+  loadQueue();
+}
+
+// --- VALIDATION QUEUE ------------------------------------
+function normalizeRatingValue(value){
+  var raw = String(value || "").trim();
+  if(!raw) return NaN;
+
+  var num = parseFloat(raw);
+  if(!isNaN(num)) return num;
+
+  var lower = raw.toLowerCase();
+  if(lower==="bad" || lower==="terrible" || lower==="very bad") return 1;
+  if(lower==="poor" || lower==="sad") return 2;
+  if(lower==="neutral" || lower==="ok") return 3;
+  if(lower==="good") return 4;
+  if(lower==="great" || lower==="excellent" || lower==="happy") return 5;
+  return NaN;
+}
+
+// queue settings stubs (total-contacts field removed)
+function loadQueueSettings(){ }
+function saveQueueSettings(){ }
+
+function openIntercomSettings(){
+  var input = document.getElementById("intercom-wid-input");
+  try {
+    input.value = localStorage.getItem("qa_dsat_intercom_workspace_id") || "xbas31f3";
+  } catch (err) {
+    input.value = "xbas31f3";
+  }
+  new bootstrap.Modal(document.getElementById("intercomSettingsModal")).show();
+}
+
+function saveIntercomSettings(){
+  var input = document.getElementById("intercom-wid-input");
+  var value = String(input.value || "").trim();
+  try {
+    if(value) localStorage.setItem("qa_dsat_intercom_workspace_id", value);
+    else localStorage.removeItem("qa_dsat_intercom_workspace_id");
+  } catch (err) {}
+  bootstrap.Modal.getInstance(document.getElementById("intercomSettingsModal")).hide();
+  // Re-render pending cards so their Intercom links reflect the new workspace ID
+  if(_allImports.length>0) renderQueue();
+}
+
+function getIntercomUrl(chatId){
+  var rawChatId = String(chatId || "").trim();
+  if(!rawChatId || rawChatId === "—") return "#";
+
+  // Default workspace ID from your Intercom URL — can be changed via the Intercom button
+  var DEFAULT_WORKSPACE = "xbas31f3";
+  var workspaceId = DEFAULT_WORKSPACE;
+  try {
+    workspaceId = localStorage.getItem("qa_dsat_intercom_workspace_id") || DEFAULT_WORKSPACE;
+  } catch (err) {}
+
+  // Exact format: https://app.intercom.com/a/inbox/{workspace}/inbox/shared/all/conversation/{chatId}
+  return "https://app.intercom.com/a/inbox/" + workspaceId + "/inbox/shared/all/conversation/" + rawChatId;
+}
+
+function confirmRebuildSheet(){
+  var ok = confirm("This will clear the DSATImports and DSATValidations tabs, reset their headers, and remove existing imported and validated D-SAT records. Continue?");
+  if(!ok) return;
+
+  document.getElementById("queue-list").innerHTML =
+    '<div class="alert alert-info"><i class="bi bi-tools me-1"></i>Fixing sheet headers...</div>';
+
+  Promise.all([
+    api("rebuildDSATImports"),
+    api("rebuildDSATValidations")
+  ]).then(function(){
+    document.getElementById("queue-stats").innerHTML = "";
+    document.getElementById("queue-list").innerHTML =
+      '<div class="alert alert-success">'+
+      '<i class="bi bi-check-circle me-1"></i>Sheet headers were reset. Re-import your CSV from <strong>D-SAT Import</strong>, then load the queue again.'+
+      '</div>';
+  }).catch(function(err){
+    document.getElementById("queue-list").innerHTML =
+      '<div class="alert alert-danger">Fix failed: ' + err.message + '</div>';
+  });
+}
+
+function loadAllQueue(){
+  // Load without any month/year filter -- shows ALL records including those with no date
+  document.getElementById("q-month").value="";
+  document.getElementById("q-year").value="";
+  loadQueue();
+}
+
+function loadQueue(){
+  var month = document.getElementById("q-month").value;  // may be empty = all
+  var year  = document.getElementById("q-year").value;   // may be empty = all
+
+  loadQueueSettings(); // restore saved total-contacts for this month/year combo
+
+  document.getElementById("queue-list").innerHTML='<div class="text-muted p-3"><i class="bi bi-hourglass-split me-1"></i>Loading...</div>';
+  document.getElementById("queue-stats").innerHTML="";
+
+  // Build filter -- only include month/year if they are set
+  var filter = {};
+  if(month) filter.month = month;
+  if(year)  filter.year  = String(year);
+
+  Promise.all([
+    api("getDSATImports", filter),
+    api("getDSATValidations", filter)
+  ]).then(function(res){
+    _allImports=res[0]||[];
+    _allVals=res[1]||[];
+
+    var doneIds={};
+    _allVals.forEach(function(v){ doneIds[String(v.chat_id)]=v; });
+    _pendingQ=_allImports.filter(function(i){ return !doneIds[String(i.chat_id)]; });
+
+    var nValid   = _allVals.filter(function(v){ return v.validation_status==="valid"; }).length;
+    var nInvalid = _allVals.filter(function(v){ return v.validation_status==="invalid"; }).length;
+    var nTotal   = _allImports.length;
+    var nPending = _pendingQ.length;
+
+    // -- Stats badges bar --
+    document.getElementById("queue-stats").innerHTML=
+      '<div class="d-flex align-items-center gap-2 flex-wrap">'+
+        '<strong class="text-muted small me-1">D-SATs:</strong>'+
+        '<span class="badge bg-secondary">'+nTotal+' received</span>'+
+        '<span class="badge bg-warning text-dark">'+nPending+' pending</span>'+
+        '<span class="badge bg-danger">'+nValid+' valid (agent fault)</span>'+
+        '<span class="badge bg-success">'+nInvalid+' invalid (not agent fault)</span>'+
+      '</div>';
+
+    if(nTotal===0){
+      document.getElementById("queue-list").innerHTML=
+        '<div class="alert alert-warning">'+
+        '<strong>No D-SATs found</strong> for the selected period.<br/>'+
+        '<ul class="mb-1 mt-2">'+
+        '<li>If you just imported, click <strong>"Show All"</strong> — records saved without a date won\'t match the month filter.</li>'+
+        '<li>Or go to <strong>D-SAT Import</strong> to upload a CSV first.</li>'+
+        '<li>If data shows "undefined" in the cards, click <strong>Fix Sheet</strong> button above to reset the sheet headers, then re-import.</li>'+
+        '</ul></div>';
+      return;
+    }
+
+    renderQueue();
+
+    // -- Summary stat card --
+    var statsHtml=
+      '<div class="card card-m mb-3 p-3">'+
+        '<div class="row g-0 text-center">'+
+          '<div class="col border-end">'+
+            '<div class="text-muted small">Received</div>'+
+            '<div class="fw-bold fs-3">'+nTotal+'</div>'+
+            '<div class="text-muted small fst-italic">D-SATs (1–3★)</div>'+
+          '</div>'+
+          '<div class="col border-end">'+
+            '<div class="text-muted small">Pending</div>'+
+            '<div class="fw-bold fs-3 text-warning">'+nPending+'</div>'+
+            '<div class="text-muted small fst-italic">awaiting validation</div>'+
+          '</div>'+
+          '<div class="col border-end">'+
+            '<div class="text-muted small">Valid <span class="fw-normal fst-italic">(agent fault)</span></div>'+
+            '<div class="fw-bold fs-3 text-danger">'+nValid+'</div>'+
+            '<div class="text-muted small fst-italic">counts against agent</div>'+
+          '</div>'+
+          '<div class="col">'+
+            '<div class="text-muted small">Invalid <span class="fw-normal fst-italic">(not agent)</span></div>'+
+            '<div class="fw-bold fs-3 text-success">'+nInvalid+'</div>'+
+            '<div class="text-muted small fst-italic">customer / process / tech</div>'+
+          '</div>'+
+        '</div>'+
+      '</div>';
+
+    document.getElementById("queue-list").innerHTML = statsHtml + document.getElementById("queue-list").innerHTML;
+
+  }).catch(function(err){
+    document.getElementById("queue-list").innerHTML='<div class="alert alert-danger">Error: '+err.message+'</div>';
+  });
+}
+
+function renderQueue(){
+  var issueOpts='<option value="">-- Select Issue Type --</option>';
+  (_issueTypes||[]).forEach(function(it){
+    var v=it["Agent Issue Type"]||it.agent_issue_type||""; if(!v) return;
+    issueOpts+='<option value="'+v+'">'+v+'</option>';
+  });
+
+  var html='';
+
+  if(_pendingQ.length>0){
+    html+='<h6 class="fw-bold mb-3 text-warning"><i class="bi bi-hourglass-split me-1"></i>Pending Validation ('+_pendingQ.length+')</h6>';
+    _pendingQ.forEach(function(imp,idx){
+      html+=buildValCard(imp, idx, issueOpts, false);
+    });
+  }
+
+  // Show already-validated ones below
+  if(_allVals.length>0){
+    html+='<hr/><h6 class="fw-bold mb-3 text-success"><i class="bi bi-check-circle me-1"></i>Already Validated ('+_allVals.length+')</h6>';
+    html+='<div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr>'+
+      '<th>Agent</th><th>Chat ID</th><th>Rating</th><th>Date</th>'+
+      '<th>Responsible</th><th>Status</th><th>Issue Type</th><th>Done By</th><th style="width:70px">Actions</th>'+
+      '</tr></thead><tbody>';
+    _allVals.forEach(function(v,idx){
+      var statusCls=v.validation_status==="valid"?"danger":"success";
+      html+='<tr>'+
+        '<td class="fw-semibold">'+v.agent_name+'</td>'+
+        '<td class="small text-muted">'+v.chat_id+'</td>'+
+        '<td><span class="badge bg-danger">'+v.rating+'</span></td>'+
+        '<td class="small">'+v.date+'</td>'+
+        '<td>'+v.responsible+'</td>'+
+        '<td><span class="badge bg-'+statusCls+'">'+v.validation_status+'</span></td>'+
+        '<td class="small">'+(v.agent_issue_type||'--')+'</td>'+
+        '<td class="small">'+(v.done_by||'--')+'</td>'+
+        '<td>'+
+          '<button class="btn btn-sm btn-outline-warning py-0 px-1 me-1" onclick="openEditValidation('+idx+')" title="Edit"><i class="bi bi-pencil"></i></button>'+
+          '<button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="confirmDeleteValidation(\''+v.dsat_id+'\',\''+v.agent_name+'\',\''+v.chat_id+'\')" title="Remove — returns to pending"><i class="bi bi-arrow-counterclockwise"></i></button>'+
+        '</td>'+
+        '</tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+
+  document.getElementById("queue-list").innerHTML += html;
+}
+
+function buildValCard(imp, idx, issueOpts, startOpen){
+  var ratingCls=Number(imp.rating)===1?"danger":Number(imp.rating)===2?"warning":"info";
+  var agentName = imp.agent_name || "--";
+  var chatId    = imp.chat_id    || "--";
+  var dateStr   = imp.date       || "--";
+  var intercomUrl = getIntercomUrl(chatId);
+  var defaultDoneBy = window._defaultDoneBy || "";
+  // Build TX Type options
+  var txOpts = '<option value="">-- Not specified --</option>' +
+    TX_TYPES.map(function(t){
+      return '<option value="'+t+'"'+(imp.transaction_type===t?' selected':'')+'>'+t+'</option>';
+    }).join('');
+
+  return (
+    '<div class="card card-m mb-3" id="qa-item-'+idx+'">'+
+
+    // Header row -- always visible
+    '<div class="card-header d-flex align-items-center gap-3 py-2 bg-white flex-wrap">'+
+      '<span class="badge bg-'+ratingCls+' fs-6">★ '+imp.rating+'</span>'+
+      '<span class="fw-bold">'+agentName+'</span>'+
+      '<span class="text-muted small ms-2"><i class="bi bi-calendar3 me-1"></i>'+dateStr+'</span>'+
+      '<span class="badge bg-light text-dark border ms-2 small font-monospace">'+chatId+'</span>'+
+      '<a href="'+intercomUrl+'" target="_blank" class="btn btn-sm btn-outline-primary ms-auto">'+
+        '<i class="bi bi-box-arrow-up-right me-1"></i>Open in Intercom</a>'+
+    '</div>'+
+
+    // Validation form -- always visible, no collapse
+    '<div class="card-body" style="background:#f8fbff;">'+
+      '<div class="row g-3 mb-2">'+
+
+        // Responsible
+        '<div class="col-md-3">'+
+          '<label class="form-label fw-semibold small">Responsible <span class="text-danger">*</span></label>'+
+          '<select class="form-select form-select-sm" id="vresp-'+idx+'" onchange="toggleIssueField('+idx+')">'+
+            '<option value="">-- Select --</option>'+
+            '<option value="Agent">Agent — valid (agent fault)</option>'+
+            '<option value="Customer">Customer — invalid</option>'+
+            '<option value="Process">Process — invalid</option>'+
+            '<option value="Technology">Technology — invalid</option>'+
+          '</select>'+
+        '</div>'+
+
+        // Agent Issue Type (shown only when Agent selected)
+        '<div class="col-md-3" id="issue-wrap-'+idx+'" style="display:none">'+
+          '<label class="form-label fw-semibold small">Agent Issue Type <span class="text-danger">*</span></label>'+
+          '<select class="form-select form-select-sm" id="vissue-'+idx+'">'+issueOpts+'</select>'+
+        '</div>'+
+
+        // Actionable Steps (shown only when Agent selected)
+        '<div class="col-md-6" id="actionable-wrap-'+idx+'" style="display:none">'+
+          '<label class="form-label fw-semibold small">Actionable Steps</label>'+
+          '<textarea class="form-control form-control-sm" id="vactions-'+idx+'" rows="2" placeholder="What should the agent do differently?"></textarea>'+
+        '</div>'+
+
+        // Transaction Type (optional)
+        '<div class="col-md-3">'+
+          '<label class="form-label fw-semibold small">Transaction Type <span class="text-muted fw-normal">(optional)</span></label>'+
+          '<select class="form-select form-select-sm" id="vtxtype-'+idx+'">'+txOpts+'</select>'+
+        '</div>'+
+
+        // Additional Notes -- always visible
+        '<div class="col-md-6">'+
+          '<label class="form-label fw-semibold small">Additional Notes</label>'+
+          '<textarea class="form-control form-control-sm" id="vnotes-'+idx+'" rows="2" placeholder="Any context about this case (internal only)..."></textarea>'+
+        '</div>'+
+
+        // Done By -- searchable from agent list via datalist
+        '<div class="col-md-3">'+
+          '<label class="form-label fw-semibold small">Done By</label>'+
+          '<input type="text" list="agent-names-datalist" autocomplete="off" '+
+            'class="form-control form-control-sm" id="vdone-'+idx+'" placeholder="Type name or pick agent..." value="'+defaultDoneBy+'"/>'+
+        '</div>'+
+
+        // Coached By -- searchable from agent list via datalist
+        '<div class="col-md-3">'+
+          '<label class="form-label fw-semibold small">Coached By</label>'+
+          '<input type="text" list="agent-names-datalist" autocomplete="off" '+
+            'class="form-control form-control-sm" id="vcoached-'+idx+'" placeholder="Type name or pick agent..."/>'+
+        '</div>'+
+
+      '</div>'+
+      '<div class="d-flex gap-2 pt-2 border-top">'+
+        '<button class="btn btn-success btn-sm" onclick="saveVal('+idx+',true)"><i class="bi bi-check-lg me-1"></i>Save & Next</button>'+
+        '<div id="vsave-result-'+idx+'" class="ms-2 align-self-center small text-muted"></div>'+
+      '</div>'+
+    '</div>'+
+
+    '</div>'
+  );
+}
+
+function toggleIssueField(idx){
+  var resp=document.getElementById("vresp-"+idx).value;
+  var isAgent=resp==="Agent";
+  document.getElementById("issue-wrap-"+idx).style.display=isAgent?"block":"none";
+  document.getElementById("actionable-wrap-"+idx).style.display=isAgent?"block":"none";
+}
+
+function saveVal(idx,goNext){
+  var imp=_pendingQ[idx]; if(!imp) return;
+  var resp=(document.getElementById("vresp-"+idx)||{}).value||"";
+  if(!resp){ alert("Please select who is Responsible."); return; }
+  if(resp==="Agent" && !((document.getElementById("vissue-"+idx)||{}).value||"")) {
+    alert("Please select Agent Issue Type when responsible is Agent."); return;
+  }
+
+  var payload={
+    import_id:        imp.import_id||"",
+    date:             imp.date,
+    month:            imp.month,
+    year:             imp.year,
+    agent_name:       imp.agent_name,
+    chat_id:          imp.chat_id,
+    rating:           imp.rating,
+    transaction_type: (document.getElementById("vtxtype-"+idx)||{value:""}).value || imp.transaction_type || "",
+    responsible:      resp,
+    agent_issue_type: (document.getElementById("vissue-"+idx)||{}).value||"",
+    actionable_steps: (document.getElementById("vactions-"+idx)||{}).value||"",
+    additional_notes: (document.getElementById("vnotes-"+idx)||{}).value||"",
+    done_by:          (document.getElementById("vdone-"+idx)||{}).value||"",
+    coached_by:       (document.getElementById("vcoached-"+idx)||{}).value||"",
+    validated_by:     (document.getElementById("vdone-"+idx)||{}).value||""
+  };
+
+  var resultEl=document.getElementById("vsave-result-"+idx);
+  if(resultEl) resultEl.textContent="Saving...";
+
+  api("validateDSAT",payload).then(function(r){
+    var el=document.getElementById("qa-item-"+idx);
+    if(el) el.remove();
+    _pendingQ.splice(idx,1);
+    // Reload to refresh stats + validated list
+    loadQueue();
+  }).catch(function(err){
+    if(resultEl) resultEl.textContent="Error: "+err.message;
+  });
+}
+
+// --- AGENT VIEW ------------------------------------------
+function loadAgentView(){
+  var agent=document.getElementById("av-agent").value;
+  var month=document.getElementById("av-month").value;
+  var year=document.getElementById("av-year").value;
+  if(!agent){ alert("Select an agent."); return; }
+  document.getElementById("agent-view-content").innerHTML='<div class="text-muted p-3">Loading...</div>';
+  document.getElementById("av-coach-btn").classList.add("d-none");
+  api("getAgentMonthlySummary",{agentName:agent,month:month,year:String(year)})
+  .then(function(s){ renderAgentView(s); document.getElementById("av-coach-btn").classList.remove("d-none"); })
+  .catch(function(err){ document.getElementById("agent-view-content").innerHTML='<div class="alert alert-danger">'+err.message+'</div>'; });
+}
+
+function renderAgentView(s){
+  var sCls=s.avg_score>=90?"success":s.avg_score>=80?"warning":"danger";
+  var html='<div class="row g-3 mb-4">';
+  html+='<div class="col-md-3"><div class="card card-m p-3 text-center"><div class="text-muted small">Avg QA Score</div><div class="score-big text-'+sCls+'">'+s.avg_score+'</div></div></div>';
+  html+='<div class="col-md-3"><div class="card card-m p-3 text-center"><div class="text-muted small">Transactions</div><div class="score-big text-info">'+s.transactions.length+'<small class="fs-5">/8</small></div></div></div>';
+  html+='<div class="col-md-3"><div class="card card-m p-3 text-center"><div class="text-muted small">Valid D-SATs</div><div class="score-big text-danger">'+s.dsat_valid+'</div></div></div>';
+  html+='<div class="col-md-3"><div class="card card-m p-3 text-center"><div class="text-muted small">Total D-SAT Received</div><div class="score-big">'+s.dsat_total+'</div></div></div>';
+  html+='</div>';
+
+  // Transactions
+  if(s.transactions.length>0){
+    html+='<h6 class="fw-bold mb-2">Transactions (T1–T8)</h6><div class="row g-2 mb-4">';
+    s.transactions.forEach(function(tx){
+      var ko=String(tx.has_ko)==="true"||String(tx.has_ko)==="TRUE";
+      var sc=Number(tx.final_score);
+      var cls=ko?"score-black":sc>=90?"score-green":sc>=80?"score-yellow":"score-red";
+      html+='<div class="col-md-3"><div class="card card-m p-2">'+
+        '<div class="d-flex justify-content-between mb-1"><span class="fw-bold">T'+tx.transaction_no+'</span><span class="score-pill '+cls+'">'+tx.final_score+(ko?' KO':'')+'</span></div>'+
+        '<div class="text-muted small">'+tx.date+' · '+tx.channel+'</div>'+
+        '<div class="small text-truncate" title="'+(tx.interaction_reason||'')+'">'+(tx.interaction_reason||'—')+'</div>'+
+        '</div></div>';
+    });
+    html+='</div>';
+  }
+
+  // Weak areas
+  html+='<h6 class="fw-bold mb-2">Areas for Development</h6>';
+  if(s.weak_areas.length>0){
+    html+='<div class="card card-m p-3 mb-4 table-responsive"><table class="table table-sm mb-0"><thead class="table-light"><tr><th>Parameter</th><th>Avg</th><th>Max</th><th>%</th><th>Low in</th><th>Repetition</th></tr></thead><tbody>';
+    s.weak_areas.forEach(function(w){
+      html+='<tr><td>'+w.parameter_name+'</td><td class="text-danger fw-bold">'+w.avg_score+'</td><td>'+w.max+'</td><td>'+w.avg_pct+'%</td><td>'+w.low_in+' of '+w.of_total+'</td><td><span class="badge bg-warning text-dark">'+w.repetition_pct+'%</span></td></tr>';
+    });
+    html+='</tbody></table></div>';
+  } else {
+    html+='<div class="alert alert-success mb-4"><i class="bi bi-check-circle me-1"></i>All parameters above 75% this month!</div>';
+  }
+
+  // Parameter breakdown chart
+  if(s.parameter_breakdown && s.parameter_breakdown.length > 0) {
+    var chartH = Math.max(380, (s.parameter_breakdown.length * 40) + 100);
+    html+='<h6 class="fw-bold mb-2">Parameter Scores vs Target</h6>';
+    html+='<div class="card card-m p-3 mb-4" style="position:relative;height:'+chartH+'px"><canvas id="ch-params"></canvas></div>';
+  }
+
+  // D-SAT
+  html+='<h6 class="fw-bold mb-2">D-SAT Summary</h6>';
+  html+='<div class="row g-2 mb-2">';
+  html+='<div class="col"><div class="stat-card"><div class="stat-val">'+s.dsat_total+'</div><div class="stat-lbl">Received</div></div></div>';
+  html+='<div class="col"><div class="stat-card"><div class="stat-val text-warning">'+s.dsat_pending+'</div><div class="stat-lbl">Pending</div></div></div>';
+  html+='<div class="col"><div class="stat-card"><div class="stat-val text-danger">'+s.dsat_valid+'</div><div class="stat-lbl">Valid (Agent)</div></div></div>';
+  html+='<div class="col"><div class="stat-card"><div class="stat-val text-success">'+s.dsat_invalid+'</div><div class="stat-lbl">Invalid</div></div></div>';
+  html+='</div>';
+  html+='<div class="card card-m p-3 mb-3">';
+  if(s.issue_distribution&&s.issue_distribution.length>0){
+    html+='<div class="small fw-semibold mb-1">Issue breakdown:</div>';
+    s.issue_distribution.forEach(function(d){
+      html+='<div class="d-flex align-items-center gap-2 mb-1">'+
+        '<div style="width:200px" class="small text-truncate">'+d.issue_type+'</div>'+
+        '<div class="progress flex-grow-1" style="height:14px"><div class="progress-bar bg-danger" style="width:'+d.pct+'%"></div></div>'+
+        '<div class="small fw-bold" style="width:36px">'+d.pct+'%</div></div>';
+    });
+  } else {
+    html+='<div class="text-muted small">No issue breakdown data.</div>';
+  }
+  html+='</div>';
+
+  document.getElementById("agent-view-content").innerHTML=html;
+  window._av={agent:s.agent_name, month:s.month, year:s.year};
+
+  // Render parameter breakdown chart after DOM is set
+  if(s.parameter_breakdown && s.parameter_breakdown.length > 0) {
+    var ctx = document.getElementById("ch-params");
+    if(ctx) {
+      var labels = s.parameter_breakdown.map(function(p){ return p.name.length>30?p.name.slice(0,28)+'...':p.name; });
+      var scores = s.parameter_breakdown.map(function(p){ return p.pct; });
+      var colors = s.parameter_breakdown.map(function(p){ return p.below_target?"#e74c3c":"#27ae60"; });
+      new Chart(ctx, {
+        type:"bar",
+        data:{ labels:labels, datasets:[
+          { label:"Score %", data:scores, backgroundColor:colors },
+          { label:"Target (75%)", data:s.parameter_breakdown.map(function(){ return 75; }), type:"line", borderColor:"#e8a020", borderDash:[5,5], borderWidth:2, pointRadius:0, fill:false }
+        ]},
+        options:{ indexAxis:"y", maintainAspectRatio:false, plugins:{ legend:{ display:true }, title:{ display:true, text:"Parameter Performance (green = above 75% target)" } }, scales:{ x:{ min:0, max:100, ticks:{ callback:function(v){ return v+"%"; } } } } }
+      });
+    }
+  }
+}
+
+function goToCoaching(){
+  if(window._av){
+    document.getElementById("ce-agent").value=window._av.agent;
+    document.getElementById("ce-month").value=window._av.month;
+    document.getElementById("ce-year").value=window._av.year;
+  }
+  document.querySelectorAll("#sidebar .nav-link").forEach(function(l){ l.classList.remove("active"); });
+  document.querySelector('[data-tab="coaching"]').classList.add("active");
+  document.querySelectorAll(".tab-pane").forEach(function(p){ p.classList.remove("active"); });
+  document.getElementById("tab-coaching").classList.add("active");
+}
+
+// --- MANAGER DASHBOARD -----------------------------------
+function loadDashboard(){
+  var month=document.getElementById("m-month").value;
+  var year=document.getElementById("m-year").value;
+  document.getElementById("dashboard-content").innerHTML='<div class="text-muted">Loading...</div>';
+  Promise.all([
+    api("getManagerDashboard",{month:month,year:String(year)}),
+    api("getCsatData",{month:month,year:String(year)})
+  ]).then(function(res){ renderDashboard(res[0], res[1]||{}); })
+  .catch(function(err){ document.getElementById("dashboard-content").innerHTML='<div class="alert alert-danger">'+err.message+'</div>'; });
+}
+
+function renderDashboard(d,csatData){
+  if(!csatData) csatData={};
+  var html='<div class="row g-3 mb-4">';
+  html+='<div class="col-md-3"><div class="card card-m p-3 text-center"><div class="text-muted small">Team Avg Score</div><div class="score-big text-primary">'+d.team_avg+'</div></div></div>';
+  html+='<div class="col-md-3"><div class="card card-m p-3 text-center"><div class="text-muted small">Agents ≥ 90</div><div class="score-big text-success">'+d.agents_above_90+'<small class="fs-5 text-muted"> / '+d.agents.length+'</small></div></div></div>';
+  html+='<div class="col-md-3"><div class="card card-m p-3 text-center"><div class="text-muted small">Valid D-SATs</div><div class="score-big text-danger">'+d.total_valid_dsat+'</div></div></div>';
+  html+='<div class="col-md-3"><div class="card card-m p-3"><div class="text-muted small">Top Issue</div><div class="fw-bold mt-1 small">'+d.top_issue_type+'</div></div></div>';
+  html+='</div>';
+
+  html+='<div class="card card-m p-0 mb-4"><div class="table-responsive"><table class="table table-hover mb-0" id="rank-tbl">';
+  html+='<thead class="table-light"><tr><th>Rank</th><th>Agent</th><th onclick="sortTbl(2)" style="cursor:pointer">QA Score ↕</th><th>Rating</th><th onclick="sortTbl(4)" style="cursor:pointer">Tx ↕</th><th onclick="sortTbl(5)" style="cursor:pointer">D-SAT Received ↕</th><th onclick="sortTbl(6)" style="cursor:pointer">Valid ↕</th><th onclick="sortTbl(7)" style="cursor:pointer">Invalid ↕</th></tr></thead><tbody>';
+  d.agents.forEach(function(a){
+    var sc=a.avg_score;
+    var pill=sc>=90?"score-green":sc>=80?"score-yellow":"score-red";
+    var rkCls=a.rank===1?"rank-1":a.rank===2?"rank-2":a.rank===3?"rank-3":"";
+    html+='<tr>'+
+      '<td class="'+rkCls+' fw-bold">'+a.rank+(a.rank<=3?' <i class="bi bi-trophy-fill"></i>':'')+'</td>'+
+      '<td class="fw-semibold">'+a.agent_name+'</td>'+
+      '<td><span class="score-pill '+pill+'">'+sc+'</span></td>'+
+      '<td><span class="badge '+(sc>=90?"bg-success":sc>=80?"bg-warning text-dark":"bg-danger")+'">'+a.rating_label+'</span></td>'+
+      '<td>'+a.tx_count+'/8</td>'+
+      '<td>'+a.dsat_raw+'</td>'+
+      '<td class="text-danger fw-semibold">'+a.dsat_valid+'</td>'+
+      '<td class="text-muted">'+a.dsat_invalid+'</td>'+
+      '</tr>';
+  });
+  html+='</tbody></table></div></div>';
+
+  if(d.team_weak_areas&&d.team_weak_areas.length>0){
+    html+='<h6 class="fw-bold mb-2">Team Weak Areas</h6><div class="card card-m p-3 mb-4 table-responsive"><table class="table table-sm mb-0"><thead class="table-light"><tr><th>Parameter</th><th>Avg %</th><th>Low in</th><th>Repetition</th></tr></thead><tbody>';
+    d.team_weak_areas.forEach(function(w){
+      html+='<tr><td>'+w.parameter_name+'</td><td class="text-danger fw-bold">'+w.avg_pct+'%</td><td>'+w.low_in+' of '+w.of_total+'</td><td><span class="badge bg-warning text-dark">'+w.repetition_pct+'%</span></td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+
+  // --- Target Tracking & Manual C-SAT Input ---
+  html+='<h6 class="fw-bold mb-2 mt-3"><i class="bi bi-bullseye me-2" style="color:var(--accent)"></i>Target Tracking &amp; C-SAT Input</h6>';
+  html+='<div class="small text-muted mb-2">Targets: <strong class="text-success">QA ≥ 90%</strong> &nbsp;|&nbsp; <strong class="text-success">C-SAT after validation ≥ 85%</strong>. Enter C-SAT % manually and click Save.</div>';
+  html+='<div class="card card-m p-0 mb-3"><div class="table-responsive"><table class="table table-sm table-bordered mb-0" id="csat-tgt-tbl">';
+  html+='<thead class="table-light"><tr><th>Agent</th><th>QA Score</th><th>QA Target</th><th>C-SAT Before Val (%)</th><th>C-SAT After Val (%)</th><th>C-SAT Target</th></tr></thead><tbody>';
+  d.agents.forEach(function(a){
+    var saved=csatData[a.agent_name]||{};
+    var sid=a.agent_name.replace(/[^a-zA-Z0-9]/g,"-");
+    var qaHit=a.avg_score>=90;
+    var csatAfterVal=(saved.csat_after!==undefined&&saved.csat_after!=="") ? parseFloat(saved.csat_after) : null;
+    var csatHit=csatAfterVal!==null ? (csatAfterVal>=85) : null;
+    html+='<tr>'+
+      '<td class="fw-semibold">'+a.agent_name+'</td>'+
+      '<td><span class="score-pill '+(a.avg_score>=90?"score-green":a.avg_score>=80?"score-yellow":"score-red")+'">'+a.avg_score+'</span></td>'+
+      '<td class="text-center">'+(qaHit?'<span class="badge bg-success">✓ Hit</span>':'<span class="badge bg-danger">✗ Missed</span>')+'</td>'+
+      '<td><input type="number" class="form-control form-control-sm" id="csat-before-'+sid+'" value="'+(saved.csat_before||"")+'" min="0" max="100" step="0.1" style="width:90px" placeholder="—"/></td>'+
+      '<td><input type="number" class="form-control form-control-sm" id="csat-after-'+sid+'" value="'+(saved.csat_after||"")+'" min="0" max="100" step="0.1" style="width:90px" placeholder="—"/></td>'+
+      '<td class="text-center">'+(csatHit===null?'<span class="text-muted small">—</span>':csatHit?'<span class="badge bg-success">✓ Hit</span>':'<span class="badge bg-danger">✗ Missed</span>')+'</td>'+
+      '</tr>';
+  });
+  // Totals row
+  var totalQaAvg = d.agents.length ? Math.round(d.agents.reduce(function(s,a){return s+a.avg_score;},0)/d.agents.length*100)/100 : 0;
+  var csatBeforeVals=[],csatAfterVals=[];
+  d.agents.forEach(function(a){
+    var saved=csatData[a.agent_name]||{};
+    if(saved.csat_before!==undefined&&saved.csat_before!=="") csatBeforeVals.push(parseFloat(saved.csat_before));
+    if(saved.csat_after!==undefined&&saved.csat_after!=="") csatAfterVals.push(parseFloat(saved.csat_after));
+  });
+  var avgBefore=csatBeforeVals.length?Math.round(csatBeforeVals.reduce(function(s,v){return s+v;},0)/csatBeforeVals.length*10)/10:null;
+  var avgAfter =csatAfterVals.length ?Math.round(csatAfterVals.reduce(function(s,v){return s+v;},0)/csatAfterVals.length*10)/10:null;
+  html+='<tr class="table-light fw-bold">'+
+    '<td>Team Average</td>'+
+    '<td><span class="score-pill '+(totalQaAvg>=90?"score-green":totalQaAvg>=80?"score-yellow":"score-red")+'">'+totalQaAvg+'</span></td>'+
+    '<td class="text-center">'+(totalQaAvg>=90?'<span class="badge bg-success">✓ Hit</span>':'<span class="badge bg-danger">✗ Missed</span>')+'</td>'+
+    '<td class="text-center fw-bold">'+(avgBefore!==null?avgBefore+'%':'—')+'</td>'+
+    '<td class="text-center fw-bold">'+(avgAfter!==null?avgAfter+'%':'—')+'</td>'+
+    '<td class="text-center">'+(avgAfter===null?'<span class="text-muted">—</span>':avgAfter>=85?'<span class="badge bg-success">✓ Hit</span>':'<span class="badge bg-danger">✗ Missed</span>')+'</td>'+
+    '</tr>';
+  html+='</tbody></table></div></div>';
+  html+='<button class="btn btn-accent mb-4" onclick="saveDashboardCsat()"><i class="bi bi-save me-1"></i>Save C-SAT Data</button> <span id="csat-save-result" class="small ms-1"></span>';
+
+  html+='<div class="row g-3"><div class="col-md-6"><div class="card card-m p-3"><canvas id="ch-qa"></canvas></div></div><div class="col-md-6"><div class="card card-m p-3"><canvas id="ch-dsat"></canvas></div></div></div>';
+  document.getElementById("dashboard-content").innerHTML=html;
+
+  if(_dashChart1){_dashChart1.destroy();} if(_dashChart2){_dashChart2.destroy();}
+  var names=d.agents.map(function(a){return a.agent_name;});
+  var scores=d.agents.map(function(a){return a.avg_score;});
+  var colors=d.agents.map(function(a){return a.avg_score>=90?"#1e8449":a.avg_score>=80?"#d4ac0d":"#c0392b";});
+  _dashChart1=new Chart(document.getElementById("ch-qa"),{type:"bar",data:{labels:names,datasets:[{label:"QA Score",data:scores,backgroundColor:colors}]},options:{indexAxis:"y",plugins:{legend:{display:false},title:{display:true,text:"QA Scores"}},scales:{x:{min:0,max:100}}}});
+  _dashChart2=new Chart(document.getElementById("ch-dsat"),{type:"bar",data:{labels:names,datasets:[{label:"Valid",data:d.agents.map(function(a){return a.dsat_valid;}),backgroundColor:"#c0392b"},{label:"Invalid",data:d.agents.map(function(a){return a.dsat_invalid;}),backgroundColor:"#aab7b8"}]},options:{plugins:{title:{display:true,text:"D-SAT Distribution"}},scales:{x:{stacked:true},y:{stacked:true}}}});
+}
+
+function sortTbl(col){
+  var tbl=document.getElementById("rank-tbl"); if(!tbl) return;
+  var rows=Array.from(tbl.querySelectorAll("tbody tr"));
+  var asc=tbl.dataset.sortCol===String(col)&&tbl.dataset.sortDir==="asc";
+  rows.sort(function(a,b){
+    var va=a.cells[col].textContent.trim(), vb=b.cells[col].textContent.trim();
+    var na=parseFloat(va), nb=parseFloat(vb);
+    if(!isNaN(na)&&!isNaN(nb)) return asc?na-nb:nb-na;
+    return asc?va.localeCompare(vb):vb.localeCompare(va);
+  });
+  var tb=tbl.querySelector("tbody"); rows.forEach(function(r){tb.appendChild(r);});
+  tbl.dataset.sortCol=String(col); tbl.dataset.sortDir=asc?"desc":"asc";
+}
+
+// --- COACHING EMAIL --------------------------------------
+function generateCoaching(){
+  var agent=document.getElementById("ce-agent").value;
+  var month=document.getElementById("ce-month").value;
+  var year=document.getElementById("ce-year").value;
+  if(!agent){alert("Select an agent.");return;}
+  document.getElementById("coaching-out").classList.add("d-none");
+  api("generateCoachingEmail",{agentName:agent,month:month,year:String(year)})
+  .then(function(r){
+    document.getElementById("ce-subject").value=r.subject;
+    document.getElementById("ce-body").value=r.body;
+    document.getElementById("coaching-out").classList.remove("d-none");
+    var lk=document.getElementById("ce-sheetlink");
+    lk.innerHTML=r.summary&&r.summary.agent_sheet_link?'<i class="bi bi-table me-1"></i>Agent scorecard: <a href="'+r.summary.agent_sheet_link+'" target="_blank">Open</a>':"";
+  }).catch(function(err){alert("Error: "+err.message);});
+}
+
+function copyEmail(){
+  var text="Subject: "+document.getElementById("ce-subject").value+"\n\n"+document.getElementById("ce-body").value;
+  navigator.clipboard.writeText(text).then(function(){
+    var el=document.getElementById("copy-ok"); el.classList.remove("d-none");
+    setTimeout(function(){el.classList.add("d-none");},2500);
+  });
+}
+function openGmail(){
+  var s=encodeURIComponent(document.getElementById("ce-subject").value);
+  var b=encodeURIComponent(document.getElementById("ce-body").value);
+  window.open("https://mail.google.com/mail/?view=cm&su="+s+"&body="+b,"_blank");
+}
+
+// --- AGENTS MANAGEMENT -----------------------------------
+function loadAgentsList(){
+  document.getElementById("agents-list-content").innerHTML='<div class="text-muted small">Loading...</div>';
+  api("getAgents").then(function(agents){
+    _agents=agents||[];
+    buildAgentDropdowns();
+    if(agents.length===0){
+      document.getElementById("agents-list-content").innerHTML='<div class="text-muted small">No agents found in the sheet.</div>';
+      return;
+    }
+    var html='<div class="table-responsive"><table class="table table-hover table-sm mb-0"><thead class="table-light"><tr><th>Agent Name</th><th>Email</th><th>Scorecard</th><th></th></tr></thead><tbody>';
+    agents.forEach(function(a,idx){
+      var name=a["Agent name"]||a.agent_name||"";
+      var email=a["Email"]||a.email||"";
+      var link=a["online sheet link"]||a.online_sheet_link||"";
+      html+='<tr class="agent-row">'+
+        '<td class="fw-semibold">'+name+'</td>'+
+        '<td class="small text-muted">'+email+'</td>'+
+        '<td>'+(link?'<a href="'+link+'" target="_blank" class="small">Open <i class="bi bi-box-arrow-up-right"></i></a>':'<span class="text-muted small">—</span>')+'</td>'+
+        '<td><button class="btn btn-sm btn-outline-secondary" onclick="openEditAgent('+idx+')"><i class="bi bi-pencil me-1"></i>Edit</button></td>'+
+        '</tr>';
+    });
+    html+='</tbody></table></div>';
+    document.getElementById("agents-list-content").innerHTML=html;
+  }).catch(function(err){
+    document.getElementById("agents-list-content").innerHTML='<div class="alert alert-danger small">'+err.message+'</div>';
+  });
+}
+
+function openEditAgent(idx){
+  var a=_agents[idx]; if(!a) return;
+  document.getElementById("edit-agent-row").value=idx;
+  document.getElementById("edit-agent-name").value=a["Agent name"]||a.agent_name||"";
+  document.getElementById("edit-agent-email").value=a["Email"]||a.email||"";
+  document.getElementById("edit-agent-link").value=a["online sheet link"]||"";
+  new bootstrap.Modal(document.getElementById("editAgentModal")).show();
+}
+
+function saveAgentEdit(){
+  // Note: Editing agents in the sheet requires a dedicated Apps Script action.
+  // For now, show a helpful message and direct to the sheet.
+  alert("To edit agent details, please update them directly in the Google Sheet 'Agents' tab, then click Refresh.");
+  bootstrap.Modal.getInstance(document.getElementById("editAgentModal")).hide();
+}
+
+function addAgent(){
+  var name=document.getElementById("new-agent-name").value.trim();
+  var email=document.getElementById("new-agent-email").value.trim();
+  var link=document.getElementById("new-agent-link").value.trim();
+  if(!name){alert("Agent name is required.");return;}
+
+  // Since we don't have a writeAgent API action in Code.gs yet,
+  // show clear instructions to add to sheet directly
+  document.getElementById("agent-add-result").innerHTML=
+    '<div class="alert alert-info py-2 small">'+
+    '<i class="bi bi-info-circle me-1"></i>'+
+    'To add an agent, go to your <a href="https://docs.google.com/spreadsheets/d/1i7In8QeQ4s0BIujCGj_Ct0A3x-63YQovnYKxATo-poU" target="_blank">Google Sheet → Agents tab</a> and add a new row:<br/>'+
+    '<strong>Name:</strong> '+name+
+    (email?' &nbsp;|&nbsp; <strong>Email:</strong> '+email:'')+
+    (link?' &nbsp;|&nbsp; <strong>Link:</strong> '+link:'')+
+    '<br/>Then click Refresh on this page.'+
+    '</div>';
+}
+
+// --- UTILITIES -------------------------------------------
+function showAlert(id,type,msg){
+  document.getElementById(id).innerHTML='<div class="alert alert-'+type+' alert-dismissible py-2">'+msg+'<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
+}
+
+// --- SETTINGS ---
+var _settings = {};
+
+function loadSettings() {
+  api("getSettings").then(function(s) {
+    _settings = s || {};
+    var cn = document.getElementById("s-coord-name");
+    var ct = document.getElementById("s-coord-title");
+    var mt = document.getElementById("s-max-tx");
+    if(cn) cn.value = s.coordinator_name || "";
+    if(ct) ct.value = s.coordinator_title || "";
+    if(mt) mt.value = s.max_transactions || "8";
+    renderSettingsNames(s.done_by_names || "");
+    window._defaultDoneBy = s.coordinator_name || "";
+    var pty = document.getElementById("ptx-year");
+    if(pty && !pty.value) pty.value = new Date().getFullYear();
+    buildPtxAgentDropdown();
+    updateDoneByDatalist();
+  }).catch(function(){});
+}
+
+function renderSettingsNames(namesStr) {
+  var names = namesStr ? namesStr.split("|").filter(Boolean) : [];
+  var container = document.getElementById("s-names-list");
+  if(!container) return;
+  if(names.length === 0) {
+    container.innerHTML = '<div class="text-muted small fst-italic">No names added yet.</div>';
+    return;
+  }
+  container.innerHTML = names.map(function(n, i) {
+    return '<span class="badge bg-light text-dark border me-1 mb-1 p-2" style="font-size:.85rem">' +
+      n + ' <span style="cursor:pointer;color:#c0392b" onclick="removeSettingsName(' + i + ')">x</span></span>';
+  }).join("");
+}
+
+function addSettingsName() {
+  var inp = document.getElementById("s-new-name");
+  var name = (inp.value || "").trim();
+  if(!name) return;
+  var current = (_settings.done_by_names || "").split("|").filter(Boolean);
+  if(current.indexOf(name) === -1) current.push(name);
+  _settings.done_by_names = current.join("|");
+  inp.value = "";
+  renderSettingsNames(_settings.done_by_names);
+  updateDoneByDatalist();
+}
+
+function removeSettingsName(idx) {
+  var current = (_settings.done_by_names || "").split("|").filter(Boolean);
+  current.splice(idx, 1);
+  _settings.done_by_names = current.join("|");
+  renderSettingsNames(_settings.done_by_names);
+  updateDoneByDatalist();
+}
+
+function updateDoneByDatalist() {
+  var agentNames = _agents.map(function(a){ return a["Agent name"]||a.agent_name||""; }).filter(Boolean);
+  var customNames = (_settings.done_by_names || "").split("|").filter(Boolean);
+  var allNames = agentNames.concat(customNames.filter(function(n){ return agentNames.indexOf(n) === -1; }));
+  var dl = document.getElementById("agent-names-datalist");
+  if(dl) dl.innerHTML = allNames.map(function(n){ return '<option value="' + n + '">'; }).join("");
+}
+
+function saveSettingsForm() {
+  var payload = {
+    coordinator_name:  document.getElementById("s-coord-name").value.trim(),
+    coordinator_title: document.getElementById("s-coord-title").value.trim(),
+    max_transactions:  String(document.getElementById("s-max-tx").value || "8"),
+    done_by_names:     _settings.done_by_names || "",
+    updated_by:        document.getElementById("s-coord-name").value.trim()
+  };
+  api("saveSettings", payload).then(function() {
+    _settings = Object.assign(_settings, payload);
+    window._defaultDoneBy = payload.coordinator_name;
+    updateDoneByDatalist();
+    document.getElementById("s-save-result").innerHTML =
+      '<div class="alert alert-success py-1 small mt-2"><i class="bi bi-check-circle me-1"></i>Settings saved!</div>';
+    setTimeout(function(){ document.getElementById("s-save-result").innerHTML = ""; }, 3000);
+  }).catch(function(err) {
+    document.getElementById("s-save-result").innerHTML =
+      '<div class="alert alert-danger py-1 small mt-2">Error: ' + err.message + '</div>';
+  });
+}
+
+// --- EXPORT CSV ---
+function exportCSV(tabName) {
+  var btn = event.target.closest("button");
+  if(btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Exporting...'; }
+  api("exportData", { tab: tabName }).then(function(res) {
+    if(!res || !res.rows || res.rows.length === 0) {
+      alert("No data found in " + tabName);
+      if(btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-spreadsheet me-1"></i>Export ' + tabName; }
+      return;
+    }
+    var rows = res.rows;
+    var headers = Object.keys(rows[0]);
+    var csv = headers.join(",") + "\n";
+    rows.forEach(function(r) {
+      csv += headers.map(function(h) {
+        var v = String(r[h] || "").replace(/"/g, '""');
+        return v.indexOf(",") !== -1 || v.indexOf('"') !== -1 || v.indexOf("\n") !== -1 ? '"' + v + '"' : v;
+      }).join(",") + "\n";
+    });
+    var blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = tabName + "_" + new Date().toISOString().slice(0,10) + ".csv";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    if(btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-spreadsheet me-1"></i>Export ' + tabName; }
+  }).catch(function(err) {
+    alert("Export failed: " + err.message);
+    if(btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-spreadsheet me-1"></i>Export ' + tabName; }
+  });
+}
+
+// --- PAST QA TRANSACTIONS (view/edit/delete) ---
+var _pastTxOpen = false;
+var _pastTxData = [];
+
+function buildPtxAgentDropdown() {
+  var sel = document.getElementById("ptx-agent");
+  if(!sel) return;
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">-- Select Agent --</option>';
+  _agents.forEach(function(a) {
+    var n = a["Agent name"]||a.agent_name||""; if(!n) return;
+    var opt = document.createElement("option");
+    opt.value = n; opt.textContent = n; if(n === cur) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function togglePastTx() {
+  _pastTxOpen = !_pastTxOpen;
+  var body = document.getElementById("past-tx-body");
+  var chev = document.getElementById("past-tx-chevron");
+  if(body) body.style.display = _pastTxOpen ? "block" : "none";
+  if(chev) chev.className = _pastTxOpen ? "bi bi-chevron-up" : "bi bi-chevron-down";
+  if(_pastTxOpen && !document.getElementById("ptx-agent").value) {
+    var pty = document.getElementById("ptx-year");
+    if(pty && !pty.value) pty.value = new Date().getFullYear();
+    var ptm = document.getElementById("ptx-month");
+    if(ptm && !ptm.value) {
+      var months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+      ptm.value = months[new Date().getMonth()];
+    }
+  }
+}
+
+function loadPastTx() {
+  var agent = document.getElementById("ptx-agent").value;
+  var month = document.getElementById("ptx-month").value;
+  var year  = document.getElementById("ptx-year").value;
+  if(!agent) { alert("Select an agent."); return; }
+  var container = document.getElementById("past-tx-list");
+  container.innerHTML = '<div class="text-muted small">Loading...</div>';
+  api("getQATransactions", { agentName: agent, month: month, year: String(year) }).then(function(txs) {
+    _pastTxData = txs || [];
+    if(_pastTxData.length === 0) {
+      container.innerHTML = '<div class="alert alert-warning small">No transactions found for ' + agent + ' in ' + month + ' ' + year + '.</div>';
+      return;
+    }
+    _pastTxData.sort(function(a,b){ return Number(a.transaction_no) - Number(b.transaction_no); });
+    var html = '<div class="table-responsive"><table class="table table-sm table-bordered mb-0">';
+    html += '<thead class="table-light"><tr><th>T#</th><th>Date</th><th>Channel</th><th>Interaction Reason</th><th>Score</th><th>Rating</th><th width="120">Actions</th></tr></thead><tbody>';
+    _pastTxData.forEach(function(tx, idx) {
+      var ko = String(tx.has_ko) === "true" || String(tx.has_ko) === "TRUE";
+      var sc = Number(tx.final_score);
+      var pill = ko ? "score-black" : sc>=90 ? "score-green" : sc>=80 ? "score-yellow" : "score-red";
+      html += '<tr>' +
+        '<td class="fw-bold">T' + tx.transaction_no + '</td>' +
+        '<td>' + tx.date + '</td>' +
+        '<td>' + (tx.channel||"") + '</td>' +
+        '<td class="small">' + (tx.interaction_reason||"--") + '</td>' +
+        '<td><span class="score-pill ' + pill + '">' + tx.final_score + (ko?" KO":"") + '</span></td>' +
+        '<td class="small">' + (tx.rating_label||"") + '</td>' +
+        '<td><button class="btn btn-sm btn-outline-danger me-1" onclick="confirmDeleteTx(\'' + tx.qa_id + '\',' + idx + ')"><i class="bi bi-trash"></i></button>' +
+        '<button class="btn btn-sm btn-outline-secondary" onclick="loadEditTx(\'' + tx.qa_id + '\',' + idx + ')"><i class="bi bi-pencil"></i></button></td>' +
+        '</tr>';
+    });
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+  }).catch(function(err) {
+    container.innerHTML = '<div class="alert alert-danger small">Error: ' + err.message + '</div>';
+  });
+}
+
+function confirmDeleteTx(qaId, idx) {
+  var tx = _pastTxData[idx];
+  if(!tx) return;
+  if(!confirm("Delete T" + tx.transaction_no + " (" + tx.date + ", score " + tx.final_score + ")? This cannot be undone.")) return;
+  api("deleteQATransaction", { qa_id: qaId }).then(function() {
+    loadPastTx();
+    checkTxCount();
+  }).catch(function(err) { alert("Delete failed: " + err.message); });
+}
+
+function loadEditTx(qaId, idx) {
+  var tx = _pastTxData[idx];
+  if(!tx) return;
+  document.getElementById("qa-agent-input").value = tx.agent_name || "";
+  document.getElementById("qa-agent-val").value   = tx.agent_name || "";
+  document.getElementById("qa-date").value         = tx.date || "";
+  document.getElementById("qa-channel").value      = tx.channel || "Chat";
+  document.getElementById("qa-ticket").value       = tx.ticket_id || "";
+  document.getElementById("qa-reason-input").value = tx.interaction_reason || "";
+  document.getElementById("qa-reason-val").value   = tx.interaction_reason || "";
+  if(document.getElementById("qa-txtype-input")) {
+    document.getElementById("qa-txtype-input").value = tx.transaction_type || "";
+    document.getElementById("qa-txtype-val").value   = tx.transaction_type || "";
+  }
+  try {
+    var ratings = JSON.parse(tx.ratings_json || "{}");
+    var notes   = JSON.parse(tx.notes_json   || "{}");
+    (_params || []).forEach(function(p) {
+      var sel  = document.querySelector('.param-sel[data-pid="' + p.id + '"]');
+      var note = document.querySelector('.param-note[data-pid="' + p.id + '"]');
+      if(sel  && ratings[p.id] !== undefined) { sel.value  = ratings[p.id]; document.getElementById("sc-"+p.id).textContent = ratings[p.id]; }
+      if(note && notes[p.id])   note.value = notes[p.id];
+    });
+  } catch(e) {}
+  updateLive();
+  window._editingQaId = qaId;
+  var btn = document.querySelector('#tab-qa-entry .btn-success');
+  if(btn) { btn.textContent = "Update Transaction"; btn.className = btn.className.replace("btn-success","btn-warning"); }
+  showAlert("qa-alert", "warning", '<i class="bi bi-pencil-square me-1"></i>Editing T' + tx.transaction_no + ' for ' + tx.agent_name + '. Click "Update Transaction" to save changes. <button class="btn btn-sm btn-outline-secondary ms-2" onclick="cancelEditTx()">Cancel Edit</button>');
+  document.getElementById("tab-qa-entry").scrollIntoView({ behavior:"smooth", block:"start" });
+}
+
+function cancelEditTx() {
+  window._editingQaId = null;
+  var btn = document.querySelector('#tab-qa-entry .btn-warning');
+  if(btn) { btn.textContent = "Save Transaction"; btn.className = btn.className.replace("btn-warning","btn-success"); }
+  resetQA();
+}
+
+// --- EDIT VALIDATION ---
+function openEditValidation(idx) {
+  var v = _allVals[idx]; if(!v) return;
+  document.getElementById("ev-dsat-id").value   = v.dsat_id || "";
+  document.getElementById("ev-resp").value       = v.responsible || "";
+  document.getElementById("ev-done").value       = v.done_by || "";
+  document.getElementById("ev-coached").value    = v.coached_by || "";
+  document.getElementById("ev-actions").value    = v.actionable_steps || "";
+  document.getElementById("ev-notes").value      = v.additional_notes || "";
+  var issueOpts = '<option value="">-- Select Issue Type --</option>';
+  (_issueTypes||[]).forEach(function(it) {
+    var val = it["Agent Issue Type"]||it.agent_issue_type||""; if(!val) return;
+    issueOpts += '<option value="' + val + '"' + (val === v.agent_issue_type ? " selected":"") + '>' + val + '</option>';
+  });
+  document.getElementById("ev-issue").innerHTML = issueOpts;
+  toggleEvIssue();
+  document.getElementById("ev-result").innerHTML = "";
+  new bootstrap.Modal(document.getElementById("editValModal")).show();
+}
+
+function toggleEvIssue() {
+  var resp = document.getElementById("ev-resp").value;
+  document.getElementById("ev-issue-wrap").style.display = resp === "Agent" ? "block" : "none";
+}
+
+function saveEditValidation() {
+  var dsatId = document.getElementById("ev-dsat-id").value;
+  var resp   = document.getElementById("ev-resp").value;
+  if(!resp) { alert("Please select Responsible."); return; }
+  if(resp === "Agent" && !document.getElementById("ev-issue").value) {
+    alert("Please select Agent Issue Type when responsible is Agent."); return;
+  }
+  var payload = {
+    dsat_id:           dsatId,
+    responsible:       resp,
+    agent_issue_type:  document.getElementById("ev-issue").value,
+    actionable_steps:  document.getElementById("ev-actions").value,
+    additional_notes:  document.getElementById("ev-notes").value,
+    done_by:           document.getElementById("ev-done").value,
+    coached_by:        document.getElementById("ev-coached").value,
+    validated_by:      document.getElementById("ev-done").value
+  };
+  api("updateDSATValidation", payload).then(function() {
+    bootstrap.Modal.getInstance(document.getElementById("editValModal")).hide();
+    loadQueue();
+  }).catch(function(err) {
+    document.getElementById("ev-result").innerHTML = '<div class="alert alert-danger small py-1">Error: ' + err.message + '</div>';
+  });
+}
+
+// --- TRANSACTION TYPE LIST (used in validation cards) ---
+var TX_TYPES = ["Refund Request","Refund Follow Up","Event Cancelation","Event Postponed","Resale Withdrawal","Presale Event","Organizer Query","Account Issue","Technical Issue","General Inquiry","Other"];
+
+function buildTxTypeDropdown() {
+  // no-op: tx type dropdown removed from QA Entry; used as plain <select> in validation cards
+}
+
+// --- REMOVE VALIDATED CASE (returns to pending) ---
+function confirmDeleteValidation(dsatId, agentName, chatId){
+  if(!confirm('Remove this validation for '+agentName+' (Chat: '+chatId+')?\n\nThis will return the case to Pending so you can re-validate it. The original import record is NOT deleted.')) return;
+  api("deleteDSATValidation",{dsat_id:dsatId}).then(function(){
+    loadQueue();
+  }).catch(function(err){ alert("Error: "+err.message); });
+}
+
+// --- SAVE ALL PENDING VALIDATIONS AT ONCE ---
+function saveAllPending(){
+  if(_pendingQ.length===0){ alert("No pending validations."); return; }
+
+  var toSave=[], missing=[];
+  _pendingQ.forEach(function(imp,idx){
+    var respEl=document.getElementById("vresp-"+idx);
+    var resp=respEl?respEl.value:"";
+    if(!resp){ missing.push(idx+1); return; }
+    if(resp==="Agent"){
+      var issueEl=document.getElementById("vissue-"+idx);
+      if(!issueEl||!issueEl.value){ missing.push(idx+1); return; }
+    }
+    toSave.push({
+      payload:{
+        import_id:        imp.import_id||"",
+        date:             imp.date,
+        month:            imp.month,
+        year:             imp.year,
+        agent_name:       imp.agent_name,
+        chat_id:          imp.chat_id,
+        rating:           imp.rating,
+        transaction_type: (document.getElementById("vtxtype-"+idx)||{value:""}).value||imp.transaction_type||"",
+        responsible:      resp,
+        agent_issue_type: (document.getElementById("vissue-"+idx)||{value:""}).value||"",
+        actionable_steps: (document.getElementById("vactions-"+idx)||{value:""}).value||"",
+        additional_notes: (document.getElementById("vnotes-"+idx)||{value:""}).value||"",
+        done_by:          (document.getElementById("vdone-"+idx)||{value:""}).value||"",
+        coached_by:       (document.getElementById("vcoached-"+idx)||{value:""}).value||"",
+        validated_by:     (document.getElementById("vdone-"+idx)||{value:""}).value||""
+      }
+    });
+  });
+
+  if(toSave.length===0){
+    alert("No cards are fully filled.\nPlease select Responsible (and Agent Issue Type when responsible = Agent) on at least one card.");
+    return;
+  }
+
+  var savBtn=document.getElementById("save-all-btn");
+  if(savBtn){ savBtn.disabled=true; savBtn.innerHTML='<i class="bi bi-hourglass-split me-1"></i>Saving '+toSave.length+'...'; }
+
+  Promise.all(toSave.map(function(item){ return api("validateDSAT",item.payload); }))
+  .then(function(){
+    if(savBtn){ savBtn.disabled=false; savBtn.innerHTML='<i class="bi bi-save2 me-1"></i>Save All Filled'; }
+    loadQueue();
+  }).catch(function(err){
+    if(savBtn){ savBtn.disabled=false; savBtn.innerHTML='<i class="bi bi-save2 me-1"></i>Save All Filled'; }
+    alert("Some saves failed: "+err.message);
+  });
+}
+
+// --- SAVE DASHBOARD C-SAT DATA ---
+function saveDashboardCsat(){
+  var month=document.getElementById("m-month").value;
+  var year=document.getElementById("m-year").value;
+  var data={};
+
+  var rows=document.querySelectorAll("#csat-tgt-tbl tbody tr");
+  rows.forEach(function(row){
+    var agent=row.cells[0].textContent.trim();
+    var sid=agent.replace(/[^a-zA-Z0-9]/g,"-");
+    var befEl=document.getElementById("csat-before-"+sid);
+    var aftEl=document.getElementById("csat-after-"+sid);
+    data[agent]={
+      csat_before: befEl ? (befEl.value||"") : "",
+      csat_after:  aftEl ? (aftEl.value||"") : ""
+    };
+  });
+
+  var resultEl=document.getElementById("csat-save-result");
+  if(resultEl) resultEl.innerHTML='<span class="text-muted">Saving...</span>';
+
+  api("saveCsatData",{month:month,year:String(year),data:data})
+  .then(function(){
+    if(resultEl) resultEl.innerHTML='<span class="text-success"><i class="bi bi-check-circle me-1"></i>Saved!</span>';
+    setTimeout(function(){ loadDashboard(); },800);
+  }).catch(function(err){
+    if(resultEl) resultEl.innerHTML='<span class="text-danger">Error: '+err.message+'</span>';
+  });
+}
+</script>
+</body>
+</html>
