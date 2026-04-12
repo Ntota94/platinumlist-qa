@@ -13,8 +13,11 @@ var TABS = {
   qaTransactions:     "QATransactions",
   dsatImports:        "DSATImports",
   dsatValidations:    "DSATValidations",
-  settings:           "AppSettings"
+  settings:           "AppSettings",
+  users:              "AppUsers"
 };
+
+var USER_HEADERS = ["user_id","name","email","password","role","active","created_at"];
 
 // QA Parameters — derived from Zainab scorecard. Hardcoded, NOT in a sheet.
 var QA_PARAMETERS = [
@@ -99,6 +102,11 @@ function handleClientRequest(jsonStr) {
     else if (action === "saveCsatData")           result = saveCsatData(payload);
     else if (action === "getCsatData")            result = getCsatData(payload);
     else if (action === "deleteDSATValidation")   result = deleteDSATValidation(payload);
+    else if (action === "login")                  result = loginUser(payload);
+    else if (action === "getUsers")               result = getUsers();
+    else if (action === "addUser")                result = addUser(payload);
+    else if (action === "deleteUser")             result = deleteUser(payload);
+    else if (action === "changePassword")         result = changePassword(payload);
     else throw new Error("Unknown action: " + action);
 
     // google.script.run cannot serialize Date objects inside nested objects/arrays.
@@ -145,6 +153,11 @@ function doPost(e) {
     else if (action === "saveCsatData")           result = saveCsatData(payload);
     else if (action === "getCsatData")            result = getCsatData(payload);
     else if (action === "deleteDSATValidation")   result = deleteDSATValidation(payload);
+    else if (action === "login")                  result = loginUser(payload);
+    else if (action === "getUsers")               result = getUsers();
+    else if (action === "addUser")                result = addUser(payload);
+    else if (action === "deleteUser")             result = deleteUser(payload);
+    else if (action === "changePassword")         result = changePassword(payload);
     else throw new Error("Unknown action: " + action);
 
     var safe = JSON.parse(JSON.stringify(result === undefined ? null : result));
@@ -184,6 +197,7 @@ function setupSheet() {
   ensure(TABS.dsatImports,     DSAT_IMPORT_HEADERS);
   ensure(TABS.dsatValidations, DSAT_VALIDATION_HEADERS);
   ensure(TABS.settings,        SETTINGS_HEADERS);
+  ensure(TABS.users,           USER_HEADERS);
 
   return { message: "Setup complete.", created: created };
 }
@@ -947,6 +961,97 @@ function getCsatData(payload) {
   var raw      = settings[key];
   if (!raw) return {};
   try { return JSON.parse(raw); } catch(e) { return {}; }
+}
+
+// ============================================================
+// USER AUTHENTICATION
+// ============================================================
+
+function loginUser(payload) {
+  var email    = String(payload.email    || "").toLowerCase().trim();
+  var password = String(payload.password || "");
+  if (!email || !password) throw new Error("Email and password are required.");
+
+  var users = getSheetData(TABS.users);
+  for (var i = 0; i < users.length; i++) {
+    var u = users[i];
+    if (String(u.email || "").toLowerCase().trim() === email) {
+      if (String(u.active || "").toUpperCase() === "FALSE") throw new Error("Account is inactive. Contact your administrator.");
+      if (String(u.password || "") !== password) throw new Error("Incorrect password.");
+      return { user_id: u.user_id, name: u.name, email: u.email, role: u.role || "user" };
+    }
+  }
+  throw new Error("No account found for that email address.");
+}
+
+function getUsers() {
+  var users = getSheetData(TABS.users);
+  // Return without password field
+  return users.map(function(u) {
+    return { user_id: u.user_id, name: u.name, email: u.email, role: u.role, active: u.active, created_at: u.created_at };
+  });
+}
+
+function addUser(payload) {
+  var name     = String(payload.name     || "").trim();
+  var email    = String(payload.email    || "").toLowerCase().trim();
+  var password = String(payload.password || "").trim();
+  var role     = String(payload.role     || "user").trim();
+  if (!name || !email || !password) throw new Error("Name, email, and password are required.");
+
+  // Check duplicate
+  var existing = getSheetData(TABS.users);
+  for (var i = 0; i < existing.length; i++) {
+    if (String(existing[i].email || "").toLowerCase().trim() === email) throw new Error("A user with that email already exists.");
+  }
+
+  var row = {
+    user_id:    generateId("usr"),
+    name:       name,
+    email:      email,
+    password:   password,
+    role:       role,
+    active:     "TRUE",
+    created_at: nowISO()
+  };
+  appendRow(TABS.users, USER_HEADERS, row);
+  return { user_id: row.user_id, name: row.name, email: row.email, role: row.role };
+}
+
+function deleteUser(payload) {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName(TABS.users);
+  if (!sheet) throw new Error("AppUsers tab not found");
+  var values = sheet.getDataRange().getValues();
+  var userId = String(payload.user_id || "");
+  if (!userId) throw new Error("user_id is required");
+  for (var i = 1; i < values.length; i++) {
+    if (String(values[i][0]) === userId) {
+      sheet.deleteRow(i + 1);
+      return { deleted: true, user_id: userId };
+    }
+  }
+  throw new Error("User not found: " + userId);
+}
+
+function changePassword(payload) {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName(TABS.users);
+  if (!sheet) throw new Error("AppUsers tab not found");
+  var values = sheet.getDataRange().getValues();
+  var email       = String(payload.email       || "").toLowerCase().trim();
+  var oldPassword = String(payload.oldPassword || "");
+  var newPassword = String(payload.newPassword || "").trim();
+  if (!email || !oldPassword || !newPassword) throw new Error("All fields are required.");
+  if (newPassword.length < 6) throw new Error("New password must be at least 6 characters.");
+  for (var i = 1; i < values.length; i++) {
+    if (String(values[i][2] || "").toLowerCase().trim() === email) {
+      if (String(values[i][3] || "") !== oldPassword) throw new Error("Current password is incorrect.");
+      sheet.getRange(i + 1, 4).setValue(newPassword);
+      return { changed: true };
+    }
+  }
+  throw new Error("User not found.");
 }
 
 function generateCoachingEmail(payload) {

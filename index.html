@@ -127,9 +127,65 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
 .changelog-item .ch-version { font-weight:700; color:var(--brand); font-size:.88rem; }
 .changelog-item .ch-date { font-size:.76rem; color:#888; margin-left:8px; }
 .changelog-item .ch-by { font-size:.76rem; color:var(--brand-light); font-weight:600; }
+
+/* ── Login screen ─────────────────────────────────────────── */
+#login-screen {
+  position:fixed; inset:0; z-index:9999;
+  background:linear-gradient(135deg, #3a0099 0%, #6B00EE 50%, #4A00BB 100%);
+  display:flex; align-items:center; justify-content:center;
+}
+#login-screen.hidden { display:none; }
+.login-box {
+  background:#fff; border-radius:16px; padding:40px 36px;
+  width:100%; max-width:400px;
+  box-shadow:0 20px 60px rgba(0,0,0,.35);
+}
+.login-box .pl-logo-lg {
+  width:56px; height:56px; background:var(--brand); border-radius:12px;
+  display:flex; align-items:center; justify-content:center;
+  color:#fff; font-weight:900; font-size:1.3rem; margin:0 auto 16px;
+  box-shadow:0 4px 16px rgba(107,0,238,.4);
+}
+.login-box h5 { font-weight:800; color:var(--brand); text-align:center; margin-bottom:4px; }
+.login-box .login-sub { text-align:center; color:#888; font-size:.85rem; margin-bottom:28px; }
+.login-box .form-label { font-weight:600; font-size:.85rem; color:#444; }
+.login-box .btn-login { background:var(--brand); color:#fff; font-weight:700; border:none; width:100%; padding:11px; border-radius:8px; font-size:.95rem; }
+.login-box .btn-login:hover { background:var(--brand-mid); color:#fff; }
+#login-error { display:none; }
+
+/* ── User badge in sidebar ────────────────────────────────── */
+.user-badge { display:flex; align-items:center; gap:8px; padding:8px 14px; background:rgba(255,255,255,.08); border-radius:8px; margin-bottom:8px; }
+.user-badge .u-avatar { width:30px; height:30px; border-radius:50%; background:var(--accent); color:var(--brand); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:.78rem; flex-shrink:0; }
+.user-badge .u-name { color:#fff; font-size:.8rem; font-weight:600; line-height:1.2; }
+.user-badge .u-role { font-size:.67rem; color:rgba(255,255,255,.45); text-transform:uppercase; letter-spacing:.06em; }
 </style>
 </head>
 <body>
+
+<!-- ═══════════════════════ LOGIN SCREEN ═══════════════════════ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="pl-logo-lg">PL</div>
+    <h5>Platinumlist QA System</h5>
+    <p class="login-sub">GCC Customer Support · Quality Team</p>
+    <div id="login-error" class="alert alert-danger py-2 px-3 mb-3" style="font-size:.85rem;"></div>
+    <div class="mb-3">
+      <label class="form-label">Work Email</label>
+      <input type="email" id="login-email" class="form-control" placeholder="you@platinumlist.net" autocomplete="email"/>
+    </div>
+    <div class="mb-4">
+      <label class="form-label">Password</label>
+      <div class="input-group">
+        <input type="password" id="login-password" class="form-control" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/>
+        <button class="btn btn-outline-secondary" type="button" onclick="togglePwVis()" tabindex="-1"><i class="bi bi-eye" id="pw-eye-icon"></i></button>
+      </div>
+    </div>
+    <button class="btn btn-login" onclick="doLogin()" id="login-btn">
+      <span id="login-btn-text">Sign In</span>
+    </button>
+    <p class="text-center mt-3 mb-0" style="font-size:.75rem;color:#aaa;">Contact your QA Coordinator to get access</p>
+  </div>
+</div>
 
 <!-- SIDEBAR -->
 <div id="sidebar">
@@ -154,8 +210,18 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
     <a class="nav-link"        href="#" data-tab="settings">   <i class="bi bi-gear"></i> Settings</a>
   </nav>
   <div class="sidebar-footer">
+    <div class="user-badge" id="sidebar-user-badge" style="display:none">
+      <div class="u-avatar" id="sidebar-avatar">?</div>
+      <div>
+        <div class="u-name" id="sidebar-uname">—</div>
+        <div class="u-role" id="sidebar-urole">—</div>
+      </div>
+    </div>
     <div id="conn-status" class="small text-warning">Connecting...</div>
-    <div class="small mt-1" style="color:rgba(255,255,255,.25);font-size:.68rem">v2.1 · GCC Team</div>
+    <div class="d-flex align-items-center justify-content-between mt-2">
+      <div class="small" style="color:rgba(255,255,255,.25);font-size:.68rem">v2.1 · GCC Team</div>
+      <button class="btn btn-sm py-0 px-2" style="font-size:.7rem;color:rgba(255,255,255,.4);border-color:rgba(255,255,255,.15)" onclick="doLogout()" id="logout-btn" title="Sign out"><i class="bi bi-box-arrow-right"></i> Sign out</button>
+    </div>
   </div>
 </div>
 
@@ -548,6 +614,46 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
       </div>
     </div>
 
+    <!-- User Management -->
+    <div class="col-12" id="user-mgmt-section">
+      <div class="card card-m p-3" style="border-top:3px solid var(--brand)">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <h6 class="fw-bold mb-0"><i class="bi bi-people me-2" style="color:var(--brand)"></i>User Management</h6>
+          <button class="btn btn-sm btn-brand" onclick="showAddUserForm()"><i class="bi bi-person-plus me-1"></i>Add User</button>
+        </div>
+        <!-- Add user form (hidden by default) -->
+        <div id="add-user-form" class="card bg-light border-0 p-3 mb-3" style="display:none">
+          <div class="row g-2">
+            <div class="col-md-3"><label class="form-label small fw-semibold">Full Name</label><input type="text" id="nu-name" class="form-control form-control-sm" placeholder="Zainab Al ..."/></div>
+            <div class="col-md-3"><label class="form-label small fw-semibold">Work Email</label><input type="email" id="nu-email" class="form-control form-control-sm" placeholder="name@platinumlist.net"/></div>
+            <div class="col-md-2"><label class="form-label small fw-semibold">Password</label><input type="text" id="nu-password" class="form-control form-control-sm" placeholder="min 6 chars"/></div>
+            <div class="col-md-2"><label class="form-label small fw-semibold">Role</label>
+              <select id="nu-role" class="form-select form-select-sm"><option value="user">User</option><option value="admin">Admin</option></select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end gap-2">
+              <button class="btn btn-sm btn-accent" onclick="submitAddUser()"><i class="bi bi-check-lg me-1"></i>Save</button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="hideAddUserForm()">Cancel</button>
+            </div>
+          </div>
+          <div id="add-user-err" class="mt-2 text-danger small" style="display:none"></div>
+        </div>
+        <!-- Users table -->
+        <div id="users-table-wrap">
+          <div class="text-muted small">Loading users...</div>
+        </div>
+        <!-- Change password (own account) -->
+        <hr class="my-3"/>
+        <h6 class="fw-semibold small mb-2"><i class="bi bi-key me-1" style="color:var(--accent)"></i>Change My Password</h6>
+        <div class="row g-2 align-items-end">
+          <div class="col-md-3"><label class="form-label small">Current Password</label><input type="password" id="cp-old" class="form-control form-control-sm"/></div>
+          <div class="col-md-3"><label class="form-label small">New Password</label><input type="password" id="cp-new" class="form-control form-control-sm"/></div>
+          <div class="col-md-3"><label class="form-label small">Confirm New</label><input type="password" id="cp-confirm" class="form-control form-control-sm"/></div>
+          <div class="col-md-3"><button class="btn btn-sm btn-accent w-100" onclick="submitChangePassword()"><i class="bi bi-key me-1"></i>Change Password</button></div>
+        </div>
+        <div id="cp-result" class="mt-2 small" style="display:none"></div>
+      </div>
+    </div>
+
     <!-- Version & Changelog -->
     <div class="col-12">
       <div class="card card-m p-3 card-purple">
@@ -684,11 +790,13 @@ document.addEventListener("click", function(e){
   document.querySelectorAll(".tab-pane").forEach(function(p){ p.classList.remove("active"); });
   var pane = document.getElementById("tab-"+tab);
   if(pane) pane.classList.add("active");
+  // Lazy-load users when Settings is opened
+  if(tab === "settings") { try{ loadUsersTable(); }catch(e){} }
 });
 
 document.addEventListener("DOMContentLoaded",function(){
   try{ setDefaults(); }catch(err){ console.error("setDefaults:", err); }
-  try{ loadInitialData(); }catch(err){ console.error("loadInitialData:", err); }
+  // loadInitialData is now called after login — do not call it here directly
 });
 
 function setDefaults(){
@@ -749,6 +857,204 @@ function api(action, payload){
     if(!result || !result.success) throw new Error((result && result.error) || "Unknown error");
     return result.data;
   });
+}
+
+// ─────────────────────────────────────────────────────────────
+// AUTH / SESSION
+// ─────────────────────────────────────────────────────────────
+var SESSION_KEY = "pl_qa_session";
+var SESSION_HOURS = 10; // hours before auto-logout
+
+function getSession() {
+  try {
+    var raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    var s = JSON.parse(raw);
+    if (!s || !s.email || !s.expires) return null;
+    if (Date.now() > s.expires) { localStorage.removeItem(SESSION_KEY); return null; }
+    return s;
+  } catch(e) { return null; }
+}
+
+function saveSession(user) {
+  var s = { name: user.name, email: user.email, role: user.role, expires: Date.now() + SESSION_HOURS * 3600000 };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+  return s;
+}
+
+function clearSession() { localStorage.removeItem(SESSION_KEY); }
+
+function showLoginScreen() {
+  document.getElementById("login-screen").classList.remove("hidden");
+}
+
+function hideLoginScreen() {
+  document.getElementById("login-screen").classList.add("hidden");
+}
+
+function updateSidebarUser(session) {
+  if (!session) return;
+  var badge = document.getElementById("sidebar-user-badge");
+  var avatar = document.getElementById("sidebar-avatar");
+  var uname = document.getElementById("sidebar-uname");
+  var urole = document.getElementById("sidebar-urole");
+  if (badge) badge.style.display = "flex";
+  if (avatar) avatar.textContent = (session.name || "?").charAt(0).toUpperCase();
+  if (uname) uname.textContent = session.name || session.email;
+  if (urole) urole.textContent = session.role || "user";
+}
+
+function doLogin() {
+  var email = (document.getElementById("login-email").value || "").trim();
+  var password = (document.getElementById("login-password").value || "").trim();
+  var errEl = document.getElementById("login-error");
+  var btn = document.getElementById("login-btn");
+  var btnTxt = document.getElementById("login-btn-text");
+
+  errEl.style.display = "none";
+  if (!email || !password) { errEl.textContent = "Please enter your email and password."; errEl.style.display = "block"; return; }
+
+  btn.disabled = true;
+  btnTxt.textContent = "Signing in...";
+
+  api("login", { email: email, password: password })
+    .then(function(user) {
+      var session = saveSession(user);
+      hideLoginScreen();
+      updateSidebarUser(session);
+      loadInitialData();
+    })
+    .catch(function(err) {
+      errEl.textContent = err.message || "Login failed. Please try again.";
+      errEl.style.display = "block";
+      btn.disabled = false;
+      btnTxt.textContent = "Sign In";
+    });
+}
+
+function doLogout() {
+  if (!confirm("Sign out of the QA System?")) return;
+  clearSession();
+  // Clear user badge
+  var badge = document.getElementById("sidebar-user-badge");
+  if (badge) badge.style.display = "none";
+  // Reset connection status
+  setConnStatus("Signed out", "text-warning");
+  showLoginScreen();
+  document.getElementById("login-email").value = "";
+  document.getElementById("login-password").value = "";
+  document.getElementById("login-error").style.display = "none";
+  document.getElementById("login-btn").disabled = false;
+  document.getElementById("login-btn-text").textContent = "Sign In";
+}
+
+function togglePwVis() {
+  var inp = document.getElementById("login-password");
+  var icon = document.getElementById("pw-eye-icon");
+  if (inp.type === "password") { inp.type = "text"; icon.className = "bi bi-eye-slash"; }
+  else { inp.type = "password"; icon.className = "bi bi-eye"; }
+}
+
+// Check session on page load
+document.addEventListener("DOMContentLoaded", function() {
+  var session = getSession();
+  if (session) {
+    hideLoginScreen();
+    updateSidebarUser(session);
+    loadInitialData();
+  } else {
+    showLoginScreen();
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// USER MANAGEMENT (Settings tab)
+// ─────────────────────────────────────────────────────────────
+var _usersCache = [];
+
+function loadUsersTable() {
+  var wrap = document.getElementById("users-table-wrap");
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="text-muted small">Loading...</div>';
+  api("getUsers").then(function(users) {
+    _usersCache = users || [];
+    renderUsersTable();
+  }).catch(function(err) {
+    wrap.innerHTML = '<div class="text-danger small">Error: ' + err.message + '</div>';
+  });
+}
+
+function renderUsersTable() {
+  var wrap = document.getElementById("users-table-wrap");
+  if (!wrap) return;
+  var session = getSession();
+  if (!_usersCache.length) { wrap.innerHTML = '<div class="text-muted small">No users yet. Add the first user above.</div>'; return; }
+  var html = '<table class="table table-sm table-hover mb-0"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>';
+  _usersCache.forEach(function(u) {
+    var isMe = session && session.email === u.email;
+    var active = String(u.active || "").toUpperCase() !== "FALSE";
+    html += '<tr>';
+    html += '<td class="fw-semibold">' + esc(u.name) + (isMe ? ' <span class="badge bg-primary" style="font-size:.65rem">You</span>' : '') + '</td>';
+    html += '<td class="text-muted small">' + esc(u.email) + '</td>';
+    html += '<td><span class="badge ' + (u.role === "admin" ? "bg-danger" : "bg-secondary") + '">' + esc(u.role || "user") + '</span></td>';
+    html += '<td><span class="badge ' + (active ? "bg-success" : "bg-secondary") + '">' + (active ? "Active" : "Inactive") + '</span></td>';
+    html += '<td>';
+    if (!isMe) html += '<button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="confirmDeleteUser(\'' + u.user_id + '\',\'' + esc(u.name) + '\')"><i class="bi bi-trash"></i></button>';
+    html += '</td></tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function esc(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+function showAddUserForm() { document.getElementById("add-user-form").style.display = "block"; document.getElementById("nu-name").focus(); }
+function hideAddUserForm() { document.getElementById("add-user-form").style.display = "none"; document.getElementById("add-user-err").style.display="none"; }
+
+function submitAddUser() {
+  var name = (document.getElementById("nu-name").value||"").trim();
+  var email = (document.getElementById("nu-email").value||"").trim();
+  var password = (document.getElementById("nu-password").value||"").trim();
+  var role = document.getElementById("nu-role").value;
+  var errEl = document.getElementById("add-user-err");
+  errEl.style.display = "none";
+  if (!name || !email || !password) { errEl.textContent = "All fields are required."; errEl.style.display = "block"; return; }
+  if (password.length < 6) { errEl.textContent = "Password must be at least 6 characters."; errEl.style.display = "block"; return; }
+  api("addUser", { name:name, email:email, password:password, role:role })
+    .then(function() {
+      hideAddUserForm();
+      document.getElementById("nu-name").value = "";
+      document.getElementById("nu-email").value = "";
+      document.getElementById("nu-password").value = "";
+      loadUsersTable();
+    }).catch(function(err) { errEl.textContent = err.message; errEl.style.display = "block"; });
+}
+
+function confirmDeleteUser(userId, name) {
+  if (!confirm("Remove user \"" + name + "\"?\nThey will no longer be able to log in.")) return;
+  api("deleteUser", { user_id: userId })
+    .then(function() { loadUsersTable(); })
+    .catch(function(err) { alert("Error: " + err.message); });
+}
+
+function submitChangePassword() {
+  var session = getSession();
+  if (!session) { alert("You are not logged in."); return; }
+  var oldPw = document.getElementById("cp-old").value;
+  var newPw = document.getElementById("cp-new").value;
+  var confirm2 = document.getElementById("cp-confirm").value;
+  var resEl = document.getElementById("cp-result");
+  resEl.style.display = "none";
+  if (!oldPw || !newPw || !confirm2) { resEl.className = "mt-2 small text-danger"; resEl.textContent = "All fields are required."; resEl.style.display="block"; return; }
+  if (newPw !== confirm2) { resEl.className = "mt-2 small text-danger"; resEl.textContent = "New passwords do not match."; resEl.style.display="block"; return; }
+  if (newPw.length < 6) { resEl.className = "mt-2 small text-danger"; resEl.textContent = "Password must be at least 6 characters."; resEl.style.display="block"; return; }
+  api("changePassword", { email: session.email, oldPassword: oldPw, newPassword: newPw })
+    .then(function() {
+      resEl.className = "mt-2 small text-success"; resEl.textContent = "✓ Password changed successfully."; resEl.style.display="block";
+      document.getElementById("cp-old").value = "";
+      document.getElementById("cp-new").value = "";
+      document.getElementById("cp-confirm").value = "";
+    }).catch(function(err) { resEl.className = "mt-2 small text-danger"; resEl.textContent = err.message; resEl.style.display="block"; });
 }
 
 // --- LOAD INITIAL DATA -----------------------------------
