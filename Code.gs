@@ -756,9 +756,10 @@ function createAgentMonthTab(payload) {
     try { ss = SpreadsheetApp.openById(sheetId); }
     catch(e) { results.push({ agent: name, error: "Cannot open sheet: " + e.message }); return; }
 
-    if (ss.getSheetByName(month)) {
-      results.push({ agent: name, skipped: true, reason: "Tab '" + month + "' already exists" });
-      return;
+    // Delete existing tab if present (force recreate with fresh template)
+    var existing = ss.getSheetByName(month);
+    if (existing) {
+      try { ss.deleteSheet(existing); } catch(e) { /* ignore */ }
     }
 
     try {
