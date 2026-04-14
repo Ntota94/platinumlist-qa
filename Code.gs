@@ -831,6 +831,9 @@ function buildMonthTemplate(sheet) {
     vals[b+26] = ["", "Final Score", "", "", "", "", ""];
   }
 
+  // Set Score Range column (col 5 = E) to plain text BEFORE writing
+  // to prevent Google Sheets from auto-parsing "0-2-4" as a date
+  sheet.getRange(1, 5, totalRows, 1).setNumberFormat("@");
   sheet.getRange(1, 1, totalRows, NUM_COLS).setValues(vals);
 
   // ── Formatting ──
