@@ -680,16 +680,23 @@ function writeTransactionToAgentSheet(tx) {
   }
   if (paramHeaderRow === -1) return { written: "metadata only", reason: "Rating column header not found" };
 
-  // ── 3. Write each parameter rating by matching the parameter name ──
+  // Score column is one to the right of Rating column
+  var scoreCol = ratingCol + 1;
+
+  // ── 3. Write each parameter rating AND score by matching the parameter name ──
   var paramSearchEnd = Math.min(paramHeaderRow + 25, numRows);
   QA_PARAMETERS.forEach(function(param) {
     var shortName = param.name.toLowerCase().replace(/[^a-z0-9]/g,"").slice(0, 18);
     for (var r = paramHeaderRow + 1; r < paramSearchEnd; r++) {
       var rowText = allVals[r].join(" ").toLowerCase().replace(/[^a-z0-9 ]/g,"");
       if (rowText.replace(/\s+/g,"").indexOf(shortName) !== -1) {
-        var score       = ratings[param.id] !== undefined ? ratings[param.id] : param.max;
+        var score       = ratings[param.id] !== undefined ? Number(ratings[param.id]) : param.max;
         var ratingLabel = scoreToSheetRating(score, param);
         sheet.getRange(r + 1, ratingCol + 1).setValue(ratingLabel);
+        // Write numeric score to Score column (next column after Rating)
+        if (param.type !== "fatal") {
+          sheet.getRange(r + 1, scoreCol + 1).setValue(score);
+        }
         if (noteCol !== -1 && notes[param.id]) {
           sheet.getRange(r + 1, noteCol + 1).setValue(notes[param.id]);
         }
@@ -697,6 +704,17 @@ function writeTransactionToAgentSheet(tx) {
       }
     }
   });
+
+  // ── 4. Write totals — scan for "TOTAL Without Fatal" and "Final Score" rows ──
+  var totalSearchEnd = Math.min(paramHeaderRow + 35, numRows);
+  for (var r = paramHeaderRow + 1; r < totalSearchEnd; r++) {
+    var rowJoined = allVals[r].join(" ").toLowerCase();
+    if (rowJoined.indexOf("total without fatal") !== -1 || rowJoined.indexOf("total without") !== -1) {
+      sheet.getRange(r + 1, scoreCol + 1).setValue(Number(tx.total_without_fatal || 0));
+    } else if (rowJoined.indexOf("final score") !== -1) {
+      sheet.getRange(r + 1, scoreCol + 1).setValue(Number(tx.final_score || 0));
+    }
+  }
 
   return { written: true, agent: tx.agent_name, transaction: txNo, month: month };
 }
