@@ -790,8 +790,9 @@ document.addEventListener("click", function(e){
   document.querySelectorAll(".tab-pane").forEach(function(p){ p.classList.remove("active"); });
   var pane = document.getElementById("tab-"+tab);
   if(pane) pane.classList.add("active");
-  // Lazy-load users when Settings is opened
-  if(tab === "settings") { try{ loadUsersTable(); }catch(e){} }
+  // Lazy-load on tab open
+  if(tab === "settings")   { try{ loadUsersTable();  }catch(e){} }
+  if(tab === "agents-mgr") { try{ loadAgentsList();  }catch(e){} }
 });
 
 document.addEventListener("DOMContentLoaded",function(){
@@ -2200,29 +2201,36 @@ function openEditAgent(idx){
 }
 
 function saveAgentEdit(){
-  // Note: Editing agents in the sheet requires a dedicated Apps Script action.
-  // For now, show a helpful message and direct to the sheet.
-  alert("To edit agent details, please update them directly in the Google Sheet 'Agents' tab, then click Refresh.");
-  bootstrap.Modal.getInstance(document.getElementById("editAgentModal")).hide();
+  var idx   = parseInt(document.getElementById("edit-agent-row").value);
+  var orig  = _agents[idx] ? (_agents[idx]["Agent name"]||"") : "";
+  var name  = document.getElementById("edit-agent-name").value.trim();
+  var email = document.getElementById("edit-agent-email").value.trim();
+  var link  = document.getElementById("edit-agent-link").value.trim();
+  if(!name){alert("Agent name is required.");return;}
+  api("saveAgent",{original_name:orig, name:name, email:email, link:link})
+    .then(function(){
+      bootstrap.Modal.getInstance(document.getElementById("editAgentModal")).hide();
+      loadAgentsList();
+    })
+    .catch(function(err){ alert("Error: "+err.message); });
 }
 
 function addAgent(){
-  var name=document.getElementById("new-agent-name").value.trim();
+  var name =document.getElementById("new-agent-name").value.trim();
   var email=document.getElementById("new-agent-email").value.trim();
-  var link=document.getElementById("new-agent-link").value.trim();
+  var link =document.getElementById("new-agent-link").value.trim();
   if(!name){alert("Agent name is required.");return;}
-
-  // Since we don't have a writeAgent API action in Code.gs yet,
-  // show clear instructions to add to sheet directly
-  document.getElementById("agent-add-result").innerHTML=
-    '<div class="alert alert-info py-2 small">'+
-    '<i class="bi bi-info-circle me-1"></i>'+
-    'To add an agent, go to your <a href="https://docs.google.com/spreadsheets/d/1i7In8QeQ4s0BIujCGj_Ct0A3x-63YQovnYKxATo-poU" target="_blank">Google Sheet → Agents tab</a> and add a new row:<br/>'+
-    '<strong>Name:</strong> '+name+
-    (email?' &nbsp;|&nbsp; <strong>Email:</strong> '+email:'')+
-    (link?' &nbsp;|&nbsp; <strong>Link:</strong> '+link:'')+
-    '<br/>Then click Refresh on this page.'+
-    '</div>';
+  api("saveAgent",{name:name, email:email, link:link})
+    .then(function(){
+      document.getElementById("new-agent-name").value="";
+      document.getElementById("new-agent-email").value="";
+      document.getElementById("new-agent-link").value="";
+      document.getElementById("agent-add-result").innerHTML='<div class="alert alert-success py-2 small"><i class="bi bi-check-circle me-1"></i>Agent added successfully.</div>';
+      loadAgentsList();
+    })
+    .catch(function(err){
+      document.getElementById("agent-add-result").innerHTML='<div class="alert alert-danger py-2 small">'+err.message+'</div>';
+    });
 }
 
 // --- UTILITIES -------------------------------------------

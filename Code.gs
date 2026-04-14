@@ -107,6 +107,7 @@ function handleClientRequest(jsonStr) {
     else if (action === "addUser")                result = addUser(payload);
     else if (action === "deleteUser")             result = deleteUser(payload);
     else if (action === "changePassword")         result = changePassword(payload);
+    else if (action === "saveAgent")              result = saveAgent(payload);
     else throw new Error("Unknown action: " + action);
 
     // google.script.run cannot serialize Date objects inside nested objects/arrays.
@@ -158,6 +159,7 @@ function doPost(e) {
     else if (action === "addUser")                result = addUser(payload);
     else if (action === "deleteUser")             result = deleteUser(payload);
     else if (action === "changePassword")         result = changePassword(payload);
+    else if (action === "saveAgent")              result = saveAgent(payload);
     else throw new Error("Unknown action: " + action);
 
     var safe = JSON.parse(JSON.stringify(result === undefined ? null : result));
@@ -389,7 +391,72 @@ function detectWeakAreas(transactions) {
 // ============================================================
 
 function getAgents() {
-  return getSheetData(TABS.agents);
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName(TABS.agents);
+  if (!sheet) return [];
+  var values = sheet.getDataRange().getValues();
+  if (values.length < 2) return [];
+  // Normalize headers: trim + lowercase for flexible matching
+  var rawHeaders = values[0].map(function(h){ return String(h).trim().toLowerCase(); });
+  var rows = [];
+  for (var i = 1; i < values.length; i++) {
+    var rowObj = {};
+    for (var j = 0; j < rawHeaders.length; j++) {
+      var v = values[i][j];
+      rowObj[rawHeaders[j]] = (v instanceof Date) ? v.toISOString().slice(0,10) : (v === null || v === undefined ? "" : String(v));
+    }
+    // Map to canonical names for the frontend
+    var agent = {
+      "Agent name":        rowObj["agent name"]        || rowObj["name"]  || "",
+      "Email":             rowObj["email"]              || "",
+      "online sheet link": rowObj["online sheet link"]  || rowObj["sheet link"] || rowObj["link"] || "",
+      "active":            rowObj["active"]             || "TRUE"
+    };
+    if (agent["Agent name"]) rows.push(agent);
+  }
+  return rows;
+}
+
+function saveAgent(payload) {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName(TABS.agents);
+  if (!sheet) throw new Error("Agents tab not found");
+  var name  = String(payload.name  || "").trim();
+  var email = String(payload.email || "").trim();
+  var link  = String(payload.link  || "").trim();
+  if (!name) throw new Error("Agent name is required");
+
+  var values = sheet.getDataRange().getValues();
+  var rawHeaders = values[0].map(function(h){ return String(h).trim().toLowerCase(); });
+  var nameCol  = rawHeaders.indexOf("agent name");
+  var emailCol = rawHeaders.indexOf("email");
+  var linkCol  = rawHeaders.indexOf("online sheet link");
+  if (nameCol === -1) throw new Error("'Agent name' column not found in Agents tab");
+
+  // Update existing row
+  if (payload.original_name) {
+    for (var i = 1; i < values.length; i++) {
+      if (String(values[i][nameCol]).trim() === String(payload.original_name).trim()) {
+        sheet.getRange(i+1, nameCol+1).setValue(name);
+        if (emailCol !== -1) sheet.getRange(i+1, emailCol+1).setValue(email);
+        if (linkCol  !== -1) sheet.getRange(i+1, linkCol+1).setValue(link);
+        return { saved: true, name: name };
+      }
+    }
+    throw new Error("Agent not found: " + payload.original_name);
+  }
+
+  // Add new row
+  for (var i = 1; i < values.length; i++) {
+    if (String(values[i][nameCol]).trim().toLowerCase() === name.toLowerCase()) throw new Error("Agent already exists: " + name);
+  }
+  var newRow = [];
+  for (var j = 0; j < rawHeaders.length; j++) newRow.push("");
+  if (nameCol  !== -1) newRow[nameCol]  = name;
+  if (emailCol !== -1) newRow[emailCol] = email;
+  if (linkCol  !== -1) newRow[linkCol]  = link;
+  sheet.appendRow(newRow);
+  return { saved: true, name: name, added: true };
 }
 
 function getInteractionReasons() {
