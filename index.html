@@ -463,7 +463,11 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
     <div class="col-auto pt-4">
       <button class="btn btn-outline-secondary d-none" id="av-coach-btn" onclick="goToCoaching()"><i class="bi bi-envelope-paper me-1"></i>Generate Coaching Email</button>
     </div>
+    <div class="col-auto pt-4">
+      <button class="btn btn-outline-success d-none" id="av-sync-btn" onclick="syncToAgentSheet()" title="Push all transactions for this agent/month to their personal Google Sheet scorecard"><i class="bi bi-arrow-repeat me-1"></i>Sync to Agent Sheet</button>
+    </div>
   </div>
+  <div id="av-sync-result" class="mb-2"></div>
   <div id="agent-view-content"></div>
 </div>
 
@@ -1913,8 +1917,14 @@ function loadAgentView(){
   if(!agent){ alert("Select an agent."); return; }
   document.getElementById("agent-view-content").innerHTML='<div class="text-muted p-3">Loading...</div>';
   document.getElementById("av-coach-btn").classList.add("d-none");
+  document.getElementById("av-sync-btn").classList.add("d-none");
+  document.getElementById("av-sync-result").innerHTML="";
   api("getAgentMonthlySummary",{agentName:agent,month:month,year:String(year)})
-  .then(function(s){ renderAgentView(s); document.getElementById("av-coach-btn").classList.remove("d-none"); })
+  .then(function(s){
+    renderAgentView(s);
+    document.getElementById("av-coach-btn").classList.remove("d-none");
+    document.getElementById("av-sync-btn").classList.remove("d-none");
+  })
   .catch(function(err){ document.getElementById("agent-view-content").innerHTML='<div class="alert alert-danger">'+err.message+'</div>'; });
 }
 
@@ -2004,6 +2014,39 @@ function renderAgentView(s){
       });
     }
   }
+}
+
+function syncToAgentSheet(){
+  var agent = document.getElementById("av-agent").value;
+  var month = document.getElementById("av-month").value;
+  var year  = document.getElementById("av-year").value;
+  if(!agent){ alert("Select an agent first."); return; }
+  var btn    = document.getElementById("av-sync-btn");
+  var resEl  = document.getElementById("av-sync-result");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Syncing...';
+  resEl.innerHTML = '';
+  api("syncAgentTransactions", { agentName: agent, month: month, year: String(year) })
+    .then(function(r){
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Sync to Agent Sheet';
+      var written = (r.results||[]).filter(function(x){ return x.written; }).length;
+      var skipped = (r.results||[]).filter(function(x){ return x.skipped; }).length;
+      var msg = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle me-1"></i>';
+      if(written > 0) msg += written + ' transaction(s) synced to ' + agent + "'s sheet. ";
+      if(skipped > 0){
+        var reasons = (r.results||[]).filter(function(x){ return x.skipped; }).map(function(x){ return x.reason; }).join(' | ');
+        msg += '<br/><span class="text-muted">' + skipped + ' skipped: ' + reasons + '</span>';
+      }
+      if(written === 0 && skipped === 0) msg += 'Nothing to sync.';
+      msg += '</div>';
+      resEl.innerHTML = msg;
+    })
+    .catch(function(err){
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Sync to Agent Sheet';
+      resEl.innerHTML = '<div class="alert alert-danger py-2 small">'+err.message+'</div>';
+    });
 }
 
 function goToCoaching(){

@@ -108,6 +108,7 @@ function handleClientRequest(jsonStr) {
     else if (action === "deleteUser")             result = deleteUser(payload);
     else if (action === "changePassword")         result = changePassword(payload);
     else if (action === "saveAgent")              result = saveAgent(payload);
+    else if (action === "syncAgentTransactions")  result = syncAgentTransactions(payload);
     else throw new Error("Unknown action: " + action);
 
     // google.script.run cannot serialize Date objects inside nested objects/arrays.
@@ -160,6 +161,7 @@ function doPost(e) {
     else if (action === "deleteUser")             result = deleteUser(payload);
     else if (action === "changePassword")         result = changePassword(payload);
     else if (action === "saveAgent")              result = saveAgent(payload);
+    else if (action === "syncAgentTransactions")  result = syncAgentTransactions(payload);
     else throw new Error("Unknown action: " + action);
 
     var safe = JSON.parse(JSON.stringify(result === undefined ? null : result));
@@ -558,6 +560,10 @@ function saveQATransaction(payload) {
   };
 
   appendRow(TABS.qaTransactions, QA_HEADERS, row);
+
+  // Write to agent's personal scorecard sheet (best-effort, does not block save)
+  try { writeTransactionToAgentSheet(row); } catch(e) { /* non-fatal */ }
+
   return {
     qa_id:          qaId,
     transaction_no: txNo,
@@ -565,6 +571,146 @@ function saveQATransaction(payload) {
     rating_label:   scores.rating_label,
     has_ko:         scores.has_ko
   };
+}
+
+// ============================================================
+// AGENT SCORECARD SYNC
+// ============================================================
+
+function extractSheetIdFromUrl(url) {
+  var m = String(url).match(/spreadsheets\/d\/([a-zA-Z0-9\-_]+)/);
+  return m ? m[1] : null;
+}
+
+function scoreToSheetRating(score, param) {
+  var s = Number(score);
+  if (param.type === "fatal")  return s === 0 ? "Misstep"  : "Nailed It!";
+  if (param.type === "binary") return s === 0 ? "No"       : "Yes";
+  if (s === 0)                 return "N/A";
+  if (s >= param.max)          return "Excellent";
+  return "Good";
+}
+
+// Write a single QA transaction row to the agent's personal Google Sheet
+function writeTransactionToAgentSheet(tx) {
+  var agents    = getAgents();
+  var agentLink = "";
+  for (var i = 0; i < agents.length; i++) {
+    if ((agents[i]["Agent name"] || "").trim() === (tx.agent_name || "").trim()) {
+      agentLink = agents[i]["online sheet link"] || "";
+      break;
+    }
+  }
+  if (!agentLink) return { skipped: true, reason: "No sheet link for " + tx.agent_name };
+
+  var sheetId = extractSheetIdFromUrl(agentLink);
+  if (!sheetId) return { skipped: true, reason: "Invalid sheet URL" };
+
+  var ss;
+  try { ss = SpreadsheetApp.openById(sheetId); }
+  catch(e) { return { skipped: true, reason: "Cannot open: " + e.message }; }
+
+  // Find the month tab (try exact name and year-suffixed variants)
+  var month  = tx.month || getMonthName(tx.date);
+  var year   = String(tx.year || new Date(tx.date).getFullYear());
+  var sheet  = ss.getSheetByName(month);
+  if (!sheet) sheet = ss.getSheetByName(month + " " + year);
+  if (!sheet) {
+    var tabs = ss.getSheets().map(function(s){ return s.getName(); }).join(", ");
+    return { skipped: true, reason: "No tab '" + month + "' in agent sheet. Tabs: " + tabs };
+  }
+
+  var txNo   = parseInt(tx.transaction_no);
+  var allVals = sheet.getDataRange().getValues();
+  var numRows = allVals.length;
+  var numCols = allVals[0] ? allVals[0].length : 10;
+
+  // Find the row with "Transaction N" text
+  var txRow = -1;
+  for (var r = 0; r < numRows; r++) {
+    var joined = allVals[r].join(" ").replace(/\s+/g," ").trim().toLowerCase();
+    if (joined === "transaction " + txNo || joined.indexOf("transaction " + txNo) !== -1) {
+      txRow = r;
+      break;
+    }
+  }
+  if (txRow === -1) return { skipped: true, reason: "Transaction " + txNo + " block not found in " + month + " tab" };
+
+  var ratings = {};
+  var notes   = {};
+  try { ratings = JSON.parse(tx.ratings_json || "{}"); } catch(e){}
+  try { notes   = JSON.parse(tx.notes_json   || "{}"); } catch(e){}
+
+  // ── 1. Write metadata: scan block for Date/Channel/Ticket/Interaction labels ──
+  var labelSearchEnd = Math.min(txRow + 25, numRows);
+  for (var r = txRow + 1; r < labelSearchEnd; r++) {
+    for (var c = 0; c < numCols; c++) {
+      var cell = String(allVals[r][c] || "").trim().toLowerCase();
+      var valueColOffset = 1; // write to c+1 by default
+      // skip header rows
+      if (cell === "date") {
+        sheet.getRange(r + 1, c + 1 + valueColOffset).setValue(tx.date || "");
+        break;
+      } else if (cell === "channel") {
+        sheet.getRange(r + 1, c + 1 + valueColOffset).setValue(tx.channel || "");
+        break;
+      } else if (cell === "ticket id / phone" || cell === "ticket id" || cell.indexOf("ticket") !== -1) {
+        sheet.getRange(r + 1, c + 1 + valueColOffset).setValue(tx.ticket_id || "");
+        break;
+      } else if (cell === "interaction reason" || cell === "interaction" || cell.indexOf("reason") !== -1) {
+        sheet.getRange(r + 1, c + 1 + valueColOffset).setValue(tx.interaction_reason || "");
+        break;
+      }
+    }
+  }
+
+  // ── 2. Find parameters header row (contains "rating" column) ──
+  var paramHeaderRow = -1;
+  var ratingCol      = -1;
+  var noteCol        = -1;
+  for (var r = txRow + 1; r < labelSearchEnd; r++) {
+    for (var c = 0; c < numCols; c++) {
+      var cell = String(allVals[r][c] || "").trim().toLowerCase();
+      if (cell === "rating") { paramHeaderRow = r; ratingCol = c; }
+      if (cell === "notes" || cell === "note") { noteCol = c; }
+    }
+    if (paramHeaderRow !== -1) break;
+  }
+  if (paramHeaderRow === -1) return { written: "metadata only", reason: "Rating column header not found" };
+
+  // ── 3. Write each parameter rating by matching the parameter name ──
+  var paramSearchEnd = Math.min(paramHeaderRow + 25, numRows);
+  QA_PARAMETERS.forEach(function(param) {
+    var shortName = param.name.toLowerCase().replace(/[^a-z0-9]/g,"").slice(0, 18);
+    for (var r = paramHeaderRow + 1; r < paramSearchEnd; r++) {
+      var rowText = allVals[r].join(" ").toLowerCase().replace(/[^a-z0-9 ]/g,"");
+      if (rowText.replace(/\s+/g,"").indexOf(shortName) !== -1) {
+        var score       = ratings[param.id] !== undefined ? ratings[param.id] : param.max;
+        var ratingLabel = scoreToSheetRating(score, param);
+        sheet.getRange(r + 1, ratingCol + 1).setValue(ratingLabel);
+        if (noteCol !== -1 && notes[param.id]) {
+          sheet.getRange(r + 1, noteCol + 1).setValue(notes[param.id]);
+        }
+        break;
+      }
+    }
+  });
+
+  return { written: true, agent: tx.agent_name, transaction: txNo, month: month };
+}
+
+// Sync all QA transactions for a given agent+month to their personal sheet
+function syncAgentTransactions(payload) {
+  var agentName = payload.agentName || payload.agent_name || "";
+  var month     = payload.month || "";
+  var year      = String(payload.year || "");
+  var txs       = getQATransactions({ agentName: agentName, month: month, year: year });
+  var results   = [];
+  txs.forEach(function(tx) {
+    try { results.push(writeTransactionToAgentSheet(tx)); }
+    catch(e) { results.push({ error: e.message }); }
+  });
+  return { synced: results.length, results: results };
 }
 
 // ============================================================
