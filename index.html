@@ -466,6 +466,9 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
     <div class="col-auto pt-4">
       <button class="btn btn-outline-success d-none" id="av-sync-btn" onclick="syncToAgentSheet()" title="Push all transactions for this agent/month to their personal Google Sheet scorecard"><i class="bi bi-arrow-repeat me-1"></i>Sync to Agent Sheet</button>
     </div>
+    <div class="col-auto pt-4">
+      <button class="btn btn-outline-secondary" onclick="createMonthTabForAll()" title="Create the month tab template in ALL agent sheets at once"><i class="bi bi-folder-plus me-1"></i>Create Month Tab (All Agents)</button>
+    </div>
   </div>
   <div id="av-sync-result" class="mb-2"></div>
   <div id="agent-view-content"></div>
@@ -2045,6 +2048,32 @@ function syncToAgentSheet(){
     .catch(function(err){
       btn.disabled = false;
       btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Sync to Agent Sheet';
+      resEl.innerHTML = '<div class="alert alert-danger py-2 small">'+err.message+'</div>';
+    });
+}
+
+function createMonthTabForAll(){
+  var month = document.getElementById("av-month").value;
+  var year  = document.getElementById("av-year").value;
+  if(!month){ alert("Select a month first."); return; }
+  if(!confirm("Create '" + month + "' tab in ALL agent sheets?\n\nThis will add the QA template to each agent's Google Sheet. Sheets that already have an '" + month + "' tab will be skipped.")) return;
+  var resEl = document.getElementById("av-sync-result");
+  resEl.innerHTML = '<div class="alert alert-info py-2 small"><span class="spinner-border spinner-border-sm me-2"></span>Creating tabs in all agent sheets... this may take 30–60 seconds.</div>';
+  api("createAgentMonthTab", { month: month, year: String(year) })
+    .then(function(r){
+      var created = (r.results||[]).filter(function(x){ return x.created; });
+      var skipped = (r.results||[]).filter(function(x){ return x.skipped; });
+      var errors  = (r.results||[]).filter(function(x){ return x.error; });
+      var html = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle me-1"></i>';
+      html += '<strong>' + created.length + ' tab(s) created</strong>';
+      if(created.length) html += ': ' + created.map(function(x){ return x.agent; }).join(', ');
+      if(skipped.length) html += '<br/><span class="text-muted">Skipped (' + skipped.length + '): ' + skipped.map(function(x){ return x.agent + ' — ' + x.reason; }).join(' | ') + '</span>';
+      if(errors.length)  html += '<br/><span class="text-danger">Errors: ' + errors.map(function(x){ return x.agent + ': ' + x.error; }).join(' | ') + '</span>';
+      html += '<br/><span class="text-muted small">Now click <strong>Load</strong> then <strong>Sync to Agent Sheet</strong> to push transactions.</span>';
+      html += '</div>';
+      resEl.innerHTML = html;
+    })
+    .catch(function(err){
       resEl.innerHTML = '<div class="alert alert-danger py-2 small">'+err.message+'</div>';
     });
 }

@@ -109,6 +109,7 @@ function handleClientRequest(jsonStr) {
     else if (action === "changePassword")         result = changePassword(payload);
     else if (action === "saveAgent")              result = saveAgent(payload);
     else if (action === "syncAgentTransactions")  result = syncAgentTransactions(payload);
+    else if (action === "createAgentMonthTab")    result = createAgentMonthTab(payload);
     else throw new Error("Unknown action: " + action);
 
     // google.script.run cannot serialize Date objects inside nested objects/arrays.
@@ -162,6 +163,7 @@ function doPost(e) {
     else if (action === "changePassword")         result = changePassword(payload);
     else if (action === "saveAgent")              result = saveAgent(payload);
     else if (action === "syncAgentTransactions")  result = syncAgentTransactions(payload);
+    else if (action === "createAgentMonthTab")    result = createAgentMonthTab(payload);
     else throw new Error("Unknown action: " + action);
 
     var safe = JSON.parse(JSON.stringify(result === undefined ? null : result));
@@ -711,6 +713,163 @@ function syncAgentTransactions(payload) {
     catch(e) { results.push({ error: e.message }); }
   });
   return { synced: results.length, results: results };
+}
+
+// Create the month tab with QA template in each agent's personal sheet
+function createAgentMonthTab(payload) {
+  var month     = String(payload.month || "");
+  var year      = String(payload.year  || new Date().getFullYear());
+  var agentName = String(payload.agentName || ""); // empty = all agents
+  if (!month) throw new Error("month is required");
+
+  var agents  = getAgents();
+  var results = [];
+
+  agents.forEach(function(agent) {
+    var name = agent["Agent name"] || "";
+    if (agentName && name !== agentName) return;
+    var link = agent["online sheet link"] || "";
+    if (!link) { results.push({ agent: name, skipped: true, reason: "No sheet link" }); return; }
+
+    var sheetId = extractSheetIdFromUrl(link);
+    if (!sheetId) { results.push({ agent: name, skipped: true, reason: "Invalid URL" }); return; }
+
+    var ss;
+    try { ss = SpreadsheetApp.openById(sheetId); }
+    catch(e) { results.push({ agent: name, error: "Cannot open sheet: " + e.message }); return; }
+
+    if (ss.getSheetByName(month)) {
+      results.push({ agent: name, skipped: true, reason: "Tab '" + month + "' already exists" });
+      return;
+    }
+
+    try {
+      var sheet = ss.insertSheet(month);
+      buildMonthTemplate(sheet);
+      results.push({ agent: name, created: true });
+    } catch(e) {
+      results.push({ agent: name, error: e.message });
+    }
+  });
+
+  return { month: month, results: results };
+}
+
+function buildMonthTemplate(sheet) {
+  var regularParams = QA_PARAMETERS.filter(function(p){ return p.type !== "fatal"; }); // 11
+  var fatalParams   = QA_PARAMETERS.filter(function(p){ return p.type === "fatal";  }); // 4
+
+  // Each transaction block layout (row offsets from block start, 0-based):
+  // 0  : "Transaction N" header
+  // 1  : (empty)
+  // 2  : Date      | value
+  // 3  : Channel   | value
+  // 4  : Ticket ID / Phone | value
+  // 5  : Interaction Reason | value
+  // 6  : (empty)
+  // 7  : Weight | Parameters | Rating | Score | Score Range | Criticality | Notes
+  // 8-18: 11 regular parameters
+  // 19 : "Serious Slip-Ups and Missteps" header
+  // 20-23: 4 fatal parameters
+  // 24 : (empty)
+  // 25 : TOTAL Without Fatal Errors
+  // 26 : Final Score
+  // 27 : (empty separator)
+  // 28 : (empty separator)
+  // Total = 29 rows per transaction
+
+  var BLOCK = 29;
+  var NUM_TX = 8;
+  var NUM_COLS = 7;
+  var totalRows = BLOCK * NUM_TX;
+
+  var vals = [];
+  for (var i = 0; i < totalRows; i++) vals.push(["","","","","","",""]);
+
+  for (var t = 1; t <= NUM_TX; t++) {
+    var b = (t - 1) * BLOCK;
+
+    vals[b][0]   = "Transaction " + t;
+
+    vals[b+2][0] = "Date";
+    vals[b+3][0] = "Channel";
+    vals[b+4][0] = "Ticket ID / Phone";
+    vals[b+5][0] = "Interaction Reason";
+
+    // Parameter table header — column C (index 2) = "Rating" (used by writeTransactionToAgentSheet)
+    vals[b+7] = ["Weight", "Parameters", "Rating", "Score", "Score Range", "Criticality", "Notes"];
+
+    regularParams.forEach(function(p, i) {
+      vals[b+8+i] = [p.max, p.name, "", "", p.options.join("-"), p.criticality, ""];
+    });
+
+    vals[b+19][0] = ""; vals[b+19][1] = "Serious Slip-Ups and Missteps — Fatal Errors (K.O on any)";
+
+    fatalParams.forEach(function(p, i) {
+      vals[b+20+i] = ["", p.name, "", "", "0-1", p.criticality, ""];
+    });
+
+    vals[b+25] = ["", "TOTAL Without Fatal Errors", "", "", "", "", ""];
+    vals[b+26] = ["", "Final Score", "", "", "", "", ""];
+  }
+
+  sheet.getRange(1, 1, totalRows, NUM_COLS).setValues(vals);
+
+  // ── Formatting ──
+  var brandPurple = "#6B00EE";
+  var lightPurple = "#f3eeff";
+  var grayHdr     = "#d9d9d9";
+  var yellowSect  = "#fff2cc";
+  var redLight    = "#fce8e6";
+  var greenTot    = "#d9ead3";
+  var white       = "#ffffff";
+
+  for (var t = 1; t <= NUM_TX; t++) {
+    var b = (t - 1) * BLOCK + 1; // 1-indexed sheet rows
+
+    // Transaction header
+    sheet.getRange(b, 1, 1, NUM_COLS)
+      .merge().setBackground(grayHdr).setFontWeight("bold")
+      .setFontSize(11).setHorizontalAlignment("center");
+
+    // Metadata label cells (col A)
+    sheet.getRange(b+2, 1, 4, 1).setFontWeight("bold").setBackground(lightPurple);
+    // Metadata value cells (col B) — bordered
+    sheet.getRange(b+2, 2, 4, 1).setBackground(white)
+      .setBorder(true, true, true, true, null, null, "#cccccc", SpreadsheetApp.BorderStyle.SOLID);
+
+    // Table header
+    sheet.getRange(b+7, 1, 1, NUM_COLS)
+      .setBackground(brandPurple).setFontColor("#ffffff").setFontWeight("bold");
+
+    // Regular parameter rows — alternate shading
+    for (var i = 0; i < 11; i++) {
+      var bg = (i % 2 === 0) ? "#fafafa" : white;
+      sheet.getRange(b+8+i, 1, 1, NUM_COLS).setBackground(bg);
+    }
+
+    // Fatal section header
+    sheet.getRange(b+19, 1, 1, NUM_COLS)
+      .merge().setBackground(yellowSect).setFontWeight("bold").setFontStyle("italic");
+
+    // Fatal rows
+    sheet.getRange(b+20, 1, 4, NUM_COLS).setBackground(redLight);
+
+    // Totals
+    sheet.getRange(b+25, 1, 2, NUM_COLS)
+      .setBackground(greenTot).setFontWeight("bold");
+  }
+
+  // Column widths
+  sheet.setColumnWidth(1, 70);   // Weight / Label
+  sheet.setColumnWidth(2, 300);  // Parameters / Value
+  sheet.setColumnWidth(3, 110);  // Rating
+  sheet.setColumnWidth(4, 70);   // Score
+  sheet.setColumnWidth(5, 100);  // Score Range
+  sheet.setColumnWidth(6, 130);  // Criticality
+  sheet.setColumnWidth(7, 220);  // Notes
+
+  sheet.setFrozenRows(0);
 }
 
 // ============================================================
