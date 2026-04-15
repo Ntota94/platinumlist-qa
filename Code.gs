@@ -109,7 +109,10 @@ function handleClientRequest(jsonStr) {
     else if (action === "changePassword")         result = changePassword(payload);
     else if (action === "saveAgent")              result = saveAgent(payload);
     else if (action === "syncAgentTransactions")  result = syncAgentTransactions(payload);
-    else if (action === "createAgentMonthTab")    result = createAgentMonthTab(payload);
+    else if (action === "createAgentMonthTab")       result = createAgentMonthTab(payload);
+    else if (action === "getIntercomConversation")   result = getIntercomConversation(payload);
+    else if (action === "getIntercomTags")           result = getIntercomTags();
+    else if (action === "tagIntercomConversation")   result = tagIntercomConversation(payload);
     else throw new Error("Unknown action: " + action);
 
     // google.script.run cannot serialize Date objects inside nested objects/arrays.
@@ -163,7 +166,10 @@ function doPost(e) {
     else if (action === "changePassword")         result = changePassword(payload);
     else if (action === "saveAgent")              result = saveAgent(payload);
     else if (action === "syncAgentTransactions")  result = syncAgentTransactions(payload);
-    else if (action === "createAgentMonthTab")    result = createAgentMonthTab(payload);
+    else if (action === "createAgentMonthTab")       result = createAgentMonthTab(payload);
+    else if (action === "getIntercomConversation")   result = getIntercomConversation(payload);
+    else if (action === "getIntercomTags")           result = getIntercomTags();
+    else if (action === "tagIntercomConversation")   result = tagIntercomConversation(payload);
     else throw new Error("Unknown action: " + action);
 
     var safe = JSON.parse(JSON.stringify(result === undefined ? null : result));
@@ -984,7 +990,110 @@ function validateDSAT(payload) {
   };
 
   appendRow(TABS.dsatValidations, DSAT_VALIDATION_HEADERS, row);
+
+  // Auto-tag in Intercom (best-effort — does not block save)
+  try { autoTagIntercom(row.chat_id, validationStatus); } catch(e) {}
+
   return { dsat_id: row.dsat_id, validation_status: validationStatus };
+}
+
+// ============================================================
+// INTERCOM API
+// ============================================================
+
+function callIntercomAPI(method, endpoint, body) {
+  var token = (getSettings()).intercom_token || "";
+  if (!token) throw new Error("Intercom API token not set. Add it in Settings → Intercom.");
+  var options = {
+    method: method.toLowerCase(),
+    headers: {
+      "Authorization":    "Bearer " + token,
+      "Accept":           "application/json",
+      "Content-Type":     "application/json",
+      "Intercom-Version": "2.10"
+    },
+    muteHttpExceptions: true
+  };
+  if (body) options.payload = JSON.stringify(body);
+  var res  = UrlFetchApp.fetch("https://api.intercom.io/" + endpoint, options);
+  var code = res.getResponseCode();
+  var text = res.getContentText();
+  if (code >= 400) throw new Error("Intercom " + code + ": " + text.slice(0, 200));
+  return JSON.parse(text);
+}
+
+function getIntercomConversation(payload) {
+  var convId = String(payload.conversation_id || "").trim();
+  if (!convId) throw new Error("conversation_id is required");
+
+  var data = callIntercomAPI("GET", "conversations/" + convId + "?display_as=plaintext");
+
+  // Customer info
+  var customer = { name: "", email: "", phone: "", location: "" };
+  if (data.contacts && data.contacts.contacts && data.contacts.contacts.length) {
+    try {
+      var c = callIntercomAPI("GET", "contacts/" + data.contacts.contacts[0].id);
+      customer.name     = c.name  || "";
+      customer.email    = c.email || "";
+      customer.phone    = c.phone || "";
+      customer.location = c.location ? [(c.location.city||""),(c.location.country||"")].filter(Boolean).join(", ") : "";
+    } catch(e) {}
+  }
+
+  // Source info
+  var sourceUrl = (data.source && data.source.url) ? data.source.url : "";
+  var browser   = (data.source && data.source.browser) ? data.source.browser : "";
+  var os        = (data.source && data.source.os) ? data.source.os : "";
+
+  // Messages
+  var messages = [];
+  if (data.source && data.source.body) {
+    messages.push({
+      type: "customer", author: customer.name || "Customer",
+      body: data.source.body, created_at: data.created_at || 0, part_type: "comment"
+    });
+  }
+  if (data.conversation_parts && data.conversation_parts.conversation_parts) {
+    data.conversation_parts.conversation_parts.forEach(function(p) {
+      if (!p.body && p.part_type !== "note") return;
+      var aType = p.author ? p.author.type : "";
+      messages.push({
+        type:       p.part_type === "note" ? "note" : (aType === "admin" || aType === "bot" ? "agent" : "customer"),
+        author:     p.author ? (p.author.name || p.author.type) : "Unknown",
+        body:       p.body || "",
+        created_at: p.created_at || 0,
+        part_type:  p.part_type || "comment"
+      });
+    });
+  }
+
+  // Tags
+  var tags = [];
+  if (data.tags && data.tags.tags) tags = data.tags.tags.map(function(t){ return t.name; });
+
+  return {
+    id: convId, customer: customer, source_url: sourceUrl,
+    browser: browser, os: os, messages: messages, tags: tags, state: data.state || ""
+  };
+}
+
+function getIntercomTags() {
+  var data = callIntercomAPI("GET", "tags");
+  return (data.data || []).map(function(t){ return { id: t.id, name: t.name }; });
+}
+
+function tagIntercomConversation(payload) {
+  var convId = String(payload.conversation_id || "").trim();
+  var tagId  = String(payload.tag_id          || "").trim();
+  if (!convId || !tagId) throw new Error("conversation_id and tag_id required");
+  return callIntercomAPI("POST", "conversations/" + convId + "/tags", { id: tagId });
+}
+
+function autoTagIntercom(chatId, validationStatus) {
+  var s = getSettings();
+  var tagId = validationStatus === "valid" ? (s.intercom_tag_valid || "") : (s.intercom_tag_invalid || "");
+  if (!chatId || !tagId || !s.intercom_token) return;
+  callIntercomAPI("POST", "conversations/" + chatId + "/tags", { id: tagId });
 }
 
 // ============================================================
