@@ -1097,6 +1097,22 @@ function getIntercomTags() {
   return (data.data || []).map(function(t){ return { id: t.id, name: t.name }; });
 }
 
+function testIntercomNote() {
+  var s = getSettings();
+  Logger.log("=== INTERCOM DEBUG ===");
+  Logger.log("Token set: " + (s.intercom_token ? "YES (" + s.intercom_token.slice(0,10) + "...)" : "NO"));
+  Logger.log("Admin ID from settings: [" + (s.intercom_admin_id || "") + "]");
+  try {
+    var admins = callIntercomAPI("GET", "admins");
+    Logger.log("Admins raw response: " + JSON.stringify(admins).slice(0, 500));
+    var list = admins.admins || admins.data || [];
+    Logger.log("Admin list length: " + list.length);
+    if (list.length > 0) Logger.log("First admin: " + JSON.stringify(list[0]));
+  } catch(e) {
+    Logger.log("Error calling /admins: " + e.message);
+  }
+}
+
 function getIntercomAdmins() {
   var data = callIntercomAPI("GET", "admins");
   var list = data.admins || data.data || [];
