@@ -267,7 +267,8 @@ function getSheetData(tabName) {
       // Convert Date objects to ISO string — google.script.run cannot serialize Dates
       // inside nested objects. Convert everything to a safe primitive.
       if (v instanceof Date) {
-        row[headers[j]] = isNaN(v.getTime()) ? "" : v.toISOString().slice(0, 10);
+        // Use localDateStr() — avoids UTC off-by-one in UTC+ timezones (e.g. Dubai UTC+4)
+        row[headers[j]] = localDateStr(v);
       } else if (v === null || v === undefined) {
         row[headers[j]] = "";
       } else {
@@ -308,6 +309,15 @@ function getWeekOfMonth(dateStr) {
 
 function nowISO() {
   return new Date().toISOString();
+}
+
+// Returns YYYY-MM-DD using LOCAL timezone (avoids UTC off-by-one in UTC+ zones like Dubai)
+function localDateStr(d) {
+  if (!d || isNaN(d.getTime())) return "";
+  var y  = d.getFullYear();
+  var m  = d.getMonth() + 1;
+  var dy = d.getDate();
+  return y + "-" + (m  < 10 ? "0"+m  : m)  + "-" + (dy < 10 ? "0"+dy : dy);
 }
 
 // ============================================================
@@ -407,7 +417,7 @@ function getAgents() {
     var rowObj = {};
     for (var j = 0; j < rawHeaders.length; j++) {
       var v = values[i][j];
-      rowObj[rawHeaders[j]] = (v instanceof Date) ? v.toISOString().slice(0,10) : (v === null || v === undefined ? "" : String(v));
+      rowObj[rawHeaders[j]] = (v instanceof Date) ? localDateStr(v) : (v === null || v === undefined ? "" : String(v));
     }
     // Map to canonical names for the frontend
     var agent = {

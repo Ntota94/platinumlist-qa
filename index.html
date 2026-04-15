@@ -121,7 +121,8 @@ table th { font-weight:600; font-size:.79rem; text-transform:uppercase; letter-s
 
 /* ── Misc ─────────────────────────────────────────────────── */
 textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-height:400px; }
-.val-panel { background:#f4f0ff; border:2px solid var(--brand-light); border-radius:var(--radius); padding:20px; margin-top:10px; }
+.val-panel { background:#f4f0ff; border:2px solid var(--brand-light); border-radius:var(--radius); padding:20px; margin-top:10px; transition: border-color .3s, background .3s; }
+.responsible-set { background:#f0fff8 !important; border-left:4px solid #0ca678 !important; }
 .version-badge { display:inline-block; background:var(--brand); color:var(--accent); border-radius:20px; padding:3px 10px; font-size:.75rem; font-weight:700; letter-spacing:.04em; }
 .changelog-item { border-left:3px solid var(--accent); padding:8px 12px; margin-bottom:8px; background:#fff; border-radius:0 6px 6px 0; box-shadow:var(--shadow-sm); }
 .changelog-item .ch-version { font-weight:700; color:var(--brand); font-size:.88rem; }
@@ -1801,7 +1802,7 @@ function buildValCard(imp, idx, issueOpts, startOpen){
     '</div>'+
 
     // Validation form -- always visible, no collapse
-    '<div class="card-body" style="background:#f8fbff;">'+
+    '<div class="card-body" id="val-panel-'+idx+'" style="background:#f8fbff;">'+
       '<div class="row g-3 mb-2">'+
 
         // Responsible
@@ -1875,6 +1876,11 @@ function toggleIssueField(idx){
   var isAgent=resp==="Agent";
   document.getElementById("issue-wrap-"+idx).style.display=isAgent?"block":"none";
   document.getElementById("actionable-wrap-"+idx).style.display=isAgent?"block":"none";
+  // Green card tint when Responsible is selected
+  var card=document.getElementById("qa-item-"+idx);
+  var panel=document.getElementById("val-panel-"+idx);
+  if(panel){ resp ? panel.classList.add("responsible-set") : panel.classList.remove("responsible-set"); }
+  if(card){ card.style.borderColor = resp ? "#0ca678" : ""; card.style.borderWidth = resp ? "2px" : ""; card.style.borderStyle = resp ? "solid" : ""; }
 }
 
 // ── Auto-save timer (60s countdown after Responsible is selected) ──
