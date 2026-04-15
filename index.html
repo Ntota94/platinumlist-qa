@@ -555,8 +555,9 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
     <h6 class="fw-bold mb-3">Add New Agent</h6>
     <div class="row g-2">
       <div class="col-md-3"><label class="form-label fw-semibold small">Agent Name <span class="text-danger">*</span></label><input type="text" id="new-agent-name" class="form-control form-control-sm" placeholder="Full name"/></div>
-      <div class="col-md-3"><label class="form-label fw-semibold small">Email</label><input type="email" id="new-agent-email" class="form-control form-control-sm" placeholder="name@company.com"/></div>
+      <div class="col-md-2"><label class="form-label fw-semibold small">Email</label><input type="email" id="new-agent-email" class="form-control form-control-sm" placeholder="name@company.com"/></div>
       <div class="col-md-3"><label class="form-label fw-semibold small">Scorecard Link</label><input type="text" id="new-agent-link" class="form-control form-control-sm" placeholder="Google Sheets URL"/></div>
+      <div class="col-md-2"><label class="form-label fw-semibold small">Intercom Admin ID <i class="bi bi-info-circle text-muted" title="Get this from Settings → Fetch Admins"></i></label><input type="text" id="new-agent-intercom-id" class="form-control form-control-sm" placeholder="e.g. 6445792"/></div>
       <div class="col-md-2 pt-4"><button class="btn btn-primary btn-sm w-100" onclick="addAgent()"><i class="bi bi-person-plus me-1"></i>Add Agent</button></div>
     </div>
     <div id="agent-add-result" class="mt-2"></div>
@@ -759,6 +760,15 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
       <div class="mb-3"><label class="form-label fw-semibold">Agent Name</label><input type="text" id="edit-agent-name" class="form-control"/></div>
       <div class="mb-3"><label class="form-label fw-semibold">Email</label><input type="email" id="edit-agent-email" class="form-control"/></div>
       <div class="mb-3"><label class="form-label fw-semibold">Scorecard Link</label><input type="text" id="edit-agent-link" class="form-control"/></div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Intercom Admin ID <span class="text-muted fw-normal small">(for @mentions on valid D-SATs)</span></label>
+        <div class="input-group">
+          <input type="text" id="edit-agent-intercom-id" class="form-control" placeholder="e.g. 6445792"/>
+          <button class="btn btn-outline-secondary btn-sm" type="button" onclick="lookupIntercomAdminForAgent()" title="Search Intercom admins by name"><i class="bi bi-search me-1"></i>Find in Intercom</button>
+        </div>
+        <div id="edit-agent-intercom-lookup" class="mt-1" style="max-height:150px;overflow-y:auto"></div>
+        <div class="text-muted" style="font-size:.72rem">Click "Find in Intercom" to search for this agent in your Intercom workspace and copy their ID.</div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -894,7 +904,7 @@ function setupSidebar(){
 // SCRIPT_URL: paste your Apps Script deployment URL here when
 // hosting on GitHub Pages. Leave empty when served via Apps Script.
 // ─────────────────────────────────────────────────────────────
-var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbySuzgcAn3MoUP1wc9I85V7DaM6EYMqMHeocA3SKhu77N5BHVNy7dN4EH4Y48_I_G2B/exec";
+var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxh-quv85b2THiPog3pTQAuYpLAk3Jg1g3mRDh-n2nxANHR01h6RciPRK-HI4qPDVTz/exec";
 
 function api(action, payload){
   // ── Inside Apps Script web app: use google.script.run (fastest, no CORS)
@@ -2433,15 +2443,17 @@ function loadAgentsList(){
       document.getElementById("agents-list-content").innerHTML='<div class="text-muted small">No agents found in the sheet.</div>';
       return;
     }
-    var html='<div class="table-responsive"><table class="table table-hover table-sm mb-0"><thead class="table-light"><tr><th>Agent Name</th><th>Email</th><th>Scorecard</th><th></th></tr></thead><tbody>';
+    var html='<div class="table-responsive"><table class="table table-hover table-sm mb-0"><thead class="table-light"><tr><th>Agent Name</th><th>Email</th><th>Scorecard</th><th>Intercom ID</th><th></th></tr></thead><tbody>';
     agents.forEach(function(a,idx){
       var name=a["Agent name"]||a.agent_name||"";
       var email=a["Email"]||a.email||"";
       var link=a["online sheet link"]||a.online_sheet_link||"";
+      var icid=a["intercom_admin_id"]||"";
       html+='<tr class="agent-row">'+
-        '<td class="fw-semibold">'+name+'</td>'+
-        '<td class="small text-muted">'+email+'</td>'+
-        '<td>'+(link?'<a href="'+link+'" target="_blank" class="small">Open <i class="bi bi-box-arrow-up-right"></i></a>':'<span class="text-muted small">—</span>')+'</td>'+
+        '<td class="fw-semibold">'+esc(name)+'</td>'+
+        '<td class="small text-muted">'+esc(email)+'</td>'+
+        '<td>'+(link?'<a href="'+esc(link)+'" target="_blank" class="small">Open <i class="bi bi-box-arrow-up-right"></i></a>':'<span class="text-muted small">—</span>')+'</td>'+
+        '<td class="font-monospace small">'+(icid?'<span class="badge bg-success-subtle text-success-emphasis">'+esc(icid)+'</span>':'<span class="text-muted">—</span>')+'</td>'+
         '<td><button class="btn btn-sm btn-outline-secondary" onclick="openEditAgent('+idx+')"><i class="bi bi-pencil me-1"></i>Edit</button></td>'+
         '</tr>';
     });
@@ -2458,17 +2470,41 @@ function openEditAgent(idx){
   document.getElementById("edit-agent-name").value=a["Agent name"]||a.agent_name||"";
   document.getElementById("edit-agent-email").value=a["Email"]||a.email||"";
   document.getElementById("edit-agent-link").value=a["online sheet link"]||"";
+  document.getElementById("edit-agent-intercom-id").value=a["intercom_admin_id"]||"";
+  document.getElementById("edit-agent-intercom-lookup").innerHTML="";
   new bootstrap.Modal(document.getElementById("editAgentModal")).show();
 }
 
+function lookupIntercomAdminForAgent(){
+  var lookupEl=document.getElementById("edit-agent-intercom-lookup");
+  var agentName=(document.getElementById("edit-agent-name").value||"").toLowerCase();
+  lookupEl.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span> Fetching admins...';
+  api("getIntercomAdmins").then(function(admins){
+    if(!admins||!admins.length){lookupEl.innerHTML='<span class="text-warning small">No admins found.</span>';return;}
+    // Filter by agent name if possible, else show all
+    var filtered=admins.filter(function(a){
+      return agentName && (a.name||"").toLowerCase().indexOf(agentName.split(" ")[0])>-1;
+    });
+    if(filtered.length===0) filtered=admins; // show all if no name match
+    var tbl='<table class="table table-sm table-bordered mb-0" style="font-size:.78rem"><thead class="table-light"><tr><th>Name</th><th>Email</th><th>ID</th><th></th></tr></thead><tbody>';
+    filtered.forEach(function(a){
+      tbl+='<tr><td>'+esc(a.name||"")+'</td><td>'+esc(a.email||"")+'</td><td class="font-monospace">'+esc(String(a.id))+'</td>'+
+        '<td><button class="btn btn-xs btn-success py-0 px-1" style="font-size:.72rem" onclick="document.getElementById(\'edit-agent-intercom-id\').value=\''+esc(String(a.id))+'\';document.getElementById(\'edit-agent-intercom-lookup\').innerHTML=\'<span class=\\\'text-success small\\\'>✓ ID set to '+esc(String(a.id))+'</span>\'">Use</button></td></tr>';
+    });
+    tbl+='</tbody></table>';
+    lookupEl.innerHTML=tbl;
+  }).catch(function(e){lookupEl.innerHTML='<span class="text-danger small">'+esc(e.message)+'</span>';});
+}
+
 function saveAgentEdit(){
-  var idx   = parseInt(document.getElementById("edit-agent-row").value);
-  var orig  = _agents[idx] ? (_agents[idx]["Agent name"]||"") : "";
-  var name  = document.getElementById("edit-agent-name").value.trim();
-  var email = document.getElementById("edit-agent-email").value.trim();
-  var link  = document.getElementById("edit-agent-link").value.trim();
+  var idx        = parseInt(document.getElementById("edit-agent-row").value);
+  var orig       = _agents[idx] ? (_agents[idx]["Agent name"]||"") : "";
+  var name       = document.getElementById("edit-agent-name").value.trim();
+  var email      = document.getElementById("edit-agent-email").value.trim();
+  var link       = document.getElementById("edit-agent-link").value.trim();
+  var intercomId = document.getElementById("edit-agent-intercom-id").value.trim();
   if(!name){alert("Agent name is required.");return;}
-  api("saveAgent",{original_name:orig, name:name, email:email, link:link})
+  api("saveAgent",{original_name:orig, name:name, email:email, link:link, intercom_admin_id:intercomId})
     .then(function(){
       bootstrap.Modal.getInstance(document.getElementById("editAgentModal")).hide();
       loadAgentsList();
@@ -2477,15 +2513,17 @@ function saveAgentEdit(){
 }
 
 function addAgent(){
-  var name =document.getElementById("new-agent-name").value.trim();
-  var email=document.getElementById("new-agent-email").value.trim();
-  var link =document.getElementById("new-agent-link").value.trim();
+  var name       = document.getElementById("new-agent-name").value.trim();
+  var email      = document.getElementById("new-agent-email").value.trim();
+  var link       = document.getElementById("new-agent-link").value.trim();
+  var intercomId = document.getElementById("new-agent-intercom-id").value.trim();
   if(!name){alert("Agent name is required.");return;}
-  api("saveAgent",{name:name, email:email, link:link})
+  api("saveAgent",{name:name, email:email, link:link, intercom_admin_id:intercomId})
     .then(function(){
       document.getElementById("new-agent-name").value="";
       document.getElementById("new-agent-email").value="";
       document.getElementById("new-agent-link").value="";
+      document.getElementById("new-agent-intercom-id").value="";
       document.getElementById("agent-add-result").innerHTML='<div class="alert alert-success py-2 small"><i class="bi bi-check-circle me-1"></i>Agent added successfully.</div>';
       loadAgentsList();
     })
