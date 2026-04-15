@@ -991,7 +991,7 @@ function validateDSAT(payload) {
 
   appendRow(TABS.dsatValidations, DSAT_VALIDATION_HEADERS, row);
 
-  // Auto-tag in Intercom (best-effort — does not block save)
+  // Auto-tag + internal note in Intercom (best-effort — does not block save)
   var tagResult = "not_attempted";
   try {
     var s = getSettings();
@@ -1002,6 +1002,8 @@ function validateDSAT(payload) {
       autoTagIntercom(row.chat_id, validationStatus);
       tagResult = "ok";
     }
+    // Post internal note regardless of tag result
+    try { postIntercomNote(row.chat_id, row, validationStatus); } catch(ne) {}
   } catch(e) { tagResult = "error: " + e.message; }
 
   return { dsat_id: row.dsat_id, validation_status: validationStatus, tag_result: tagResult };
@@ -1104,6 +1106,33 @@ function autoTagIntercom(chatId, validationStatus) {
   var tagId = validationStatus === "valid" ? (s.intercom_tag_valid || "") : (s.intercom_tag_invalid || "");
   if (!chatId || !tagId || !s.intercom_token) return;
   callIntercomAPI("POST", "conversations/" + chatId + "/tags", { id: tagId });
+}
+
+function postIntercomNote(chatId, row, validationStatus) {
+  if (!chatId) return;
+  var s = getSettings();
+  if (!s.intercom_token) return;
+  // Get authenticated admin ID
+  var me = callIntercomAPI("GET", "me");
+  var adminId = String(me.id || "");
+  if (!adminId) return;
+  var statusLabel = validationStatus === "valid" ? "✅ Valid — Agent Fault" : "❌ Invalid — Not Agent Fault";
+  var lines = [
+    "<b>🔍 D-SAT Validation</b>",
+    "Status: <b>" + statusLabel + "</b>",
+    "Responsible: " + (row.responsible || ""),
+  ];
+  if (row.agent_issue_type) lines.push("Issue Type: " + row.agent_issue_type);
+  if (row.actionable_steps) lines.push("Actionable Steps: " + row.actionable_steps);
+  if (row.additional_notes) lines.push("Notes: " + row.additional_notes);
+  lines.push("Validated by: " + (row.done_by || row.validated_by || ""));
+  lines.push("Date: " + (row.date || ""));
+  callIntercomAPI("POST", "conversations/" + chatId + "/reply", {
+    message_type: "note",
+    type: "admin",
+    admin_id: adminId,
+    body: lines.join("<br/>")
+  });
 }
 
 // ============================================================
@@ -1367,12 +1396,24 @@ function updateDSATValidation(payload) {
     if (String(values[i][0]) === dsatId) {
       var responsible = (payload.responsible || "").toLowerCase().trim();
       var validationStatus = (responsible === "agent") ? "valid" : "invalid";
+      // Date change: recompute month + year if new date provided
+      var newDate = String(payload.date || "").trim();
+      var rowDate  = newDate || String(values[i][2] || "");
+      var rowMonth = values[i][3];
+      var rowYear  = values[i][4];
+      if (newDate) {
+        var dp = newDate.split("-");
+        if (dp.length === 3) {
+          rowMonth = getMonthName(parseInt(dp[1], 10));
+          rowYear  = dp[0];
+        }
+      }
       var updatedRow = [
         dsatId,
         values[i][1], // import_id
-        values[i][2], // date
-        values[i][3], // month
-        values[i][4], // year
+        rowDate,
+        rowMonth,
+        rowYear,
         values[i][5], // agent_name
         values[i][6], // chat_id
         values[i][7], // rating

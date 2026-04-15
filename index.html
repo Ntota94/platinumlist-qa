@@ -781,6 +781,11 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
       <input type="hidden" id="ev-dsat-id"/>
       <div class="row g-3">
         <div class="col-md-4">
+          <label class="form-label fw-semibold small">Date</label>
+          <input type="date" class="form-control" id="ev-date"/>
+          <div class="text-muted small mt-1">Changing the date updates month &amp; year automatically.</div>
+        </div>
+        <div class="col-md-4">
           <label class="form-label fw-semibold small">Responsible *</label>
           <select class="form-select" id="ev-resp" onchange="toggleEvIssue()">
             <option value="">-- Select --</option>
@@ -2768,6 +2773,7 @@ function cancelEditTx() {
 function openEditValidation(idx) {
   var v = _allVals[idx]; if(!v) return;
   document.getElementById("ev-dsat-id").value   = v.dsat_id || "";
+  document.getElementById("ev-date").value       = v.date || "";
   document.getElementById("ev-resp").value       = v.responsible || "";
   document.getElementById("ev-done").value       = v.done_by || "";
   document.getElementById("ev-coached").value    = v.coached_by || "";
@@ -2798,6 +2804,7 @@ function saveEditValidation() {
   }
   var payload = {
     dsat_id:           dsatId,
+    date:              document.getElementById("ev-date").value,
     responsible:       resp,
     agent_issue_type:  document.getElementById("ev-issue").value,
     actionable_steps:  document.getElementById("ev-actions").value,
