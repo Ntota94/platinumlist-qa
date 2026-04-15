@@ -181,7 +181,7 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
 .user-badge .u-role { font-size:.67rem; color:rgba(255,255,255,.45); text-transform:uppercase; letter-spacing:.06em; }
 
 /* ── Dark theme toggle button ─────────────────────────────── */
-#theme-toggle { background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2); color:rgba(255,255,255,.8); border-radius:20px; padding:5px 12px; font-size:.78rem; cursor:pointer; display:flex; align-items:center; gap:6px; transition:.2s; width:100%; justify-content:center; margin-bottom:8px; }
+#theme-toggle { background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2); color:rgba(255,255,255,.8); border-radius:20px; padding:4px 10px; font-size:.75rem; cursor:pointer; display:flex; align-items:center; gap:5px; transition:.2s; }
 #theme-toggle:hover { background:rgba(255,255,255,.2); color:#fff; }
 
 /* ══════════════════════════════════════════════════════════
@@ -326,15 +326,15 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
         <div class="u-role" id="sidebar-urole">—</div>
       </div>
     </div>
-    <div id="conn-status" class="small text-warning">Connecting...</div>
-    <button id="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">
-      <i class="bi bi-moon-stars-fill" id="theme-icon"></i>
-      <span id="theme-label">Dark Mode</span>
-    </button>
-    <div class="d-flex align-items-center justify-content-between mt-2">
-      <div class="small" style="color:rgba(255,255,255,.25);font-size:.68rem">v2.1 · GCC Team</div>
-      <button class="btn btn-sm py-0 px-2" style="font-size:.7rem;color:rgba(255,255,255,.4);border-color:rgba(255,255,255,.15)" onclick="doLogout()" id="logout-btn" title="Sign out"><i class="bi bi-box-arrow-right"></i> Sign out</button>
+    <div id="conn-status" class="small text-warning mb-1">Connecting...</div>
+    <div class="d-flex align-items-center justify-content-between">
+      <button id="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">
+        <i class="bi bi-moon-stars-fill" id="theme-icon"></i>
+        <span id="theme-label">Dark Mode</span>
+      </button>
+      <button class="btn btn-sm py-0 px-2" style="font-size:.7rem;color:rgba(255,255,255,.4);border-color:rgba(255,255,255,.15)" onclick="doLogout()" id="logout-btn" title="Sign out"><i class="bi bi-box-arrow-right"></i></button>
     </div>
+    <div class="small mt-1" style="color:rgba(255,255,255,.25);font-size:.68rem">v2.1 · GCC Team</div>
   </div>
 </div>
 
