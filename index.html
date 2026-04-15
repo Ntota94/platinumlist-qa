@@ -1741,9 +1741,7 @@ function loadQueue(){
       return;
     }
 
-    renderQueue();
-
-    // -- Summary stat card --
+    // -- Summary stat card -- inserted BEFORE renderQueue so DOM refs stay valid
     var statsHtml=
       '<div class="card card-m mb-3 p-3">'+
         '<div class="row g-0 text-center">'+
@@ -1770,7 +1768,8 @@ function loadQueue(){
         '</div>'+
       '</div>';
 
-    document.getElementById("queue-list").innerHTML = statsHtml + document.getElementById("queue-list").innerHTML;
+    document.getElementById("queue-list").innerHTML = statsHtml;
+    renderQueue();
 
   }).catch(function(err){
     document.getElementById("queue-list").innerHTML='<div class="alert alert-danger">Error: '+err.message+'</div>';
