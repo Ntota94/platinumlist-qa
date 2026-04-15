@@ -179,6 +179,94 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
 .user-badge .u-avatar { width:30px; height:30px; border-radius:50%; background:var(--accent); color:var(--brand); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:.78rem; flex-shrink:0; }
 .user-badge .u-name { color:#fff; font-size:.8rem; font-weight:600; line-height:1.2; }
 .user-badge .u-role { font-size:.67rem; color:rgba(255,255,255,.45); text-transform:uppercase; letter-spacing:.06em; }
+
+/* ── Dark theme toggle button ─────────────────────────────── */
+#theme-toggle { background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2); color:rgba(255,255,255,.8); border-radius:20px; padding:5px 12px; font-size:.78rem; cursor:pointer; display:flex; align-items:center; gap:6px; transition:.2s; width:100%; justify-content:center; margin-bottom:8px; }
+#theme-toggle:hover { background:rgba(255,255,255,.2); color:#fff; }
+
+/* ══════════════════════════════════════════════════════════
+   DARK THEME
+══════════════════════════════════════════════════════════ */
+[data-theme="dark"] {
+  --bg-main:    #0f0f1a;
+  --bg-card:    #1a1a2e;
+  --bg-card2:   #16213e;
+  --bg-input:   #1e1e35;
+  --border-col: #2e2e50;
+  --text-main:  #e0e0f0;
+  --text-muted: #8888aa;
+}
+[data-theme="dark"] body { background:#0f0f1a; color:#e0e0f0; }
+[data-theme="dark"] #main { background:#0f0f1a; }
+[data-theme="dark"] .card-m,
+[data-theme="dark"] .card { background:#1a1a2e !important; border-color:#2e2e50; color:#e0e0f0; }
+[data-theme="dark"] .modal-content { background:#1a1a2e; color:#e0e0f0; border-color:#2e2e50; }
+[data-theme="dark"] .modal-header { border-color:#2e2e50; }
+[data-theme="dark"] .modal-footer { border-color:#2e2e50; }
+[data-theme="dark"] .form-control,
+[data-theme="dark"] .form-select { background:#16213e; color:#e0e0f0; border-color:#3a3a60; }
+[data-theme="dark"] .form-control:focus,
+[data-theme="dark"] .form-select:focus { background:#16213e; color:#e0e0f0; border-color:var(--accent); box-shadow:0 0 0 .2rem rgba(77,217,255,.15); }
+[data-theme="dark"] .form-control::placeholder { color:#5a5a80; }
+[data-theme="dark"] .form-control:disabled,
+[data-theme="dark"] .form-control[readonly] { background:#12122a; color:#6666aa; }
+[data-theme="dark"] .input-group-text { background:#16213e; border-color:#3a3a60; color:#aaa; }
+[data-theme="dark"] table { color:#e0e0f0; }
+[data-theme="dark"] .table { --bs-table-color:#e0e0f0; --bs-table-bg:#1a1a2e; --bs-table-border-color:#2e2e50; }
+[data-theme="dark"] .table thead th,
+[data-theme="dark"] .table-light { background:#16213e !important; color:#9999cc !important; border-color:#2e2e50 !important; }
+[data-theme="dark"] .table-hover tbody tr:hover { background:#1e1e3a !important; }
+[data-theme="dark"] .table-bordered { border-color:#2e2e50; }
+[data-theme="dark"] .table td, [data-theme="dark"] .table th { border-color:#2e2e50; }
+[data-theme="dark"] .sticky-score { background:#1a1a2e; border-top-color:var(--accent); }
+[data-theme="dark"] .stat-card { background:#1a1a2e; color:#e0e0f0; }
+[data-theme="dark"] .stat-card .stat-lbl { color:#8888aa; }
+[data-theme="dark"] .val-panel { background:#1a1a35; border-color:var(--brand-light); }
+[data-theme="dark"] .responsible-set { background:#0d2a1e !important; border-color:#0ca678 !important; }
+[data-theme="dark"] .fatal-section { background:#2a1010; border-color:#e03131; }
+[data-theme="dark"] .param-row:hover { background:#1e1e3a; }
+[data-theme="dark"] .agent-row:hover { background:#1e1e3a; }
+[data-theme="dark"] .page-title { color:var(--brand-light); }
+[data-theme="dark"] .text-muted { color:#7777aa !important; }
+[data-theme="dark"] .border-bottom { border-color:#2e2e50 !important; }
+[data-theme="dark"] .border-top { border-color:#2e2e50 !important; }
+[data-theme="dark"] .badge.bg-light { background:#2a2a45 !important; color:#ccc !important; }
+[data-theme="dark"] .bg-light { background:#16213e !important; }
+[data-theme="dark"] .bg-white { background:#1a1a2e !important; }
+[data-theme="dark"] .alert-info { background:#0d2040; border-color:#1a4080; color:#7ab3ff; }
+[data-theme="dark"] .alert-warning { background:#2a1e00; border-color:#5a4000; color:#ffc966; }
+[data-theme="dark"] .alert-success { background:#0a2a1a; border-color:#1a5a30; color:#66cc99; }
+[data-theme="dark"] .alert-danger { background:#2a0a0a; border-color:#5a1a1a; color:#ff8888; }
+[data-theme="dark"] .score-pill.score-green { background:#0a2a15; color:#4dcf80; }
+[data-theme="dark"] .score-pill.score-yellow { background:#2a1e00; color:#ffc040; }
+[data-theme="dark"] .score-pill.score-red { background:#2a0a0a; color:#ff7070; }
+[data-theme="dark"] .conv-panel { background:#12122a; border-color:#2e2e50; }
+[data-theme="dark"] .conv-customer-info { background:#1a1a35; border-color:#2e2e50; }
+[data-theme="dark"] .conv-customer-info .ci-meta,
+[data-theme="dark"] .conv-customer-info .ci-url { color:#7777aa; }
+[data-theme="dark"] .conv-msg.note .conv-bubble { background:#2a2000; color:#ffe066; border-color:#5a4a00; }
+[data-theme="dark"] .conv-tags { background:#1e1e3a; color:#9999cc; }
+[data-theme="dark"] .srch-list { background:#1a1a2e; border-color:#3a3a60; }
+[data-theme="dark"] .srch-list .srch-item:hover { background:#1e1e3a; color:#e0e0f0; }
+[data-theme="dark"] .srch-list .srch-item { color:#e0e0f0; }
+[data-theme="dark"] .changelog-item { background:#1a1a2e; }
+[data-theme="dark"] .btn-outline-secondary { color:#9999cc; border-color:#3a3a60; }
+[data-theme="dark"] .btn-outline-secondary:hover { background:#2e2e50; color:#fff; border-color:#5a5a80; }
+[data-theme="dark"] .btn-outline-primary { color:var(--accent); border-color:var(--accent); }
+[data-theme="dark"] .btn-outline-primary:hover { background:var(--accent); color:#fff; }
+[data-theme="dark"] .btn-secondary { background:#2e2e50; border-color:#3a3a60; color:#ccc; }
+[data-theme="dark"] .btn-light { background:#1e1e3a; border-color:#3a3a60; color:#ccc; }
+[data-theme="dark"] .dropdown-menu { background:#1a1a2e; border-color:#2e2e50; }
+[data-theme="dark"] .dropdown-item { color:#e0e0f0; }
+[data-theme="dark"] .dropdown-item:hover { background:#2e2e50; }
+[data-theme="dark"] h1,h2,h3,h4,h5,h6 { color:#e0e0f0; }
+[data-theme="dark"] .fw-bold, [data-theme="dark"] .fw-semibold { color:#e0e0f0; }
+[data-theme="dark"] small, [data-theme="dark"] .small { color:#8888aa; }
+[data-theme="dark"] hr { border-color:#2e2e50; }
+[data-theme="dark"] .nav-tabs .nav-link { color:#9999cc; border-color:#2e2e50; }
+[data-theme="dark"] .nav-tabs .nav-link.active { background:#1a1a2e; color:#e0e0f0; border-color:#2e2e50 #2e2e50 #1a1a2e; }
+[data-theme="dark"] .tab-content { background:#1a1a2e; }
+[data-theme="dark"] textarea.email-body { background:#16213e; color:#e0e0f0; border-color:#3a3a60; }
 </style>
 </head>
 <body>
@@ -239,6 +327,10 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
       </div>
     </div>
     <div id="conn-status" class="small text-warning">Connecting...</div>
+    <button id="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">
+      <i class="bi bi-moon-stars-fill" id="theme-icon"></i>
+      <span id="theme-label">Dark Mode</span>
+    </button>
     <div class="d-flex align-items-center justify-content-between mt-2">
       <div class="small" style="color:rgba(255,255,255,.25);font-size:.68rem">v2.1 · GCC Team</div>
       <button class="btn btn-sm py-0 px-2" style="font-size:.7rem;color:rgba(255,255,255,.4);border-color:rgba(255,255,255,.15)" onclick="doLogout()" id="logout-btn" title="Sign out"><i class="bi bi-box-arrow-right"></i> Sign out</button>
@@ -880,8 +972,30 @@ document.addEventListener("click", function(e){
 
 document.addEventListener("DOMContentLoaded",function(){
   try{ setDefaults(); }catch(err){ console.error("setDefaults:", err); }
+  // Restore saved theme
+  try{ applyTheme(localStorage.getItem("qa_theme")||"light"); }catch(e){}
   // loadInitialData is now called after login — do not call it here directly
 });
+
+// ── Dark / Light theme toggle ─────────────────────────────
+function applyTheme(theme){
+  document.documentElement.setAttribute("data-theme", theme);
+  var icon  = document.getElementById("theme-icon");
+  var label = document.getElementById("theme-label");
+  if(theme === "dark"){
+    if(icon)  { icon.className  = "bi bi-sun-fill"; }
+    if(label) { label.textContent = "Light Mode"; }
+  } else {
+    if(icon)  { icon.className  = "bi bi-moon-stars-fill"; }
+    if(label) { label.textContent = "Dark Mode"; }
+  }
+}
+function toggleTheme(){
+  var current = document.documentElement.getAttribute("data-theme") || "light";
+  var next = current === "dark" ? "light" : "dark";
+  applyTheme(next);
+  try{ localStorage.setItem("qa_theme", next); }catch(e){}
+}
 
 function setDefaults(){
   var now=new Date(), y=now.getFullYear(), m=now.getMonth();
