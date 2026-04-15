@@ -1947,7 +1947,10 @@ function toggleIssueField(idx){
 // ── Auto-save timer (60s countdown after Responsible is selected) ──
 var _autoSaveTimers = {}; // idx → {interval, remaining}
 
+var _pageReadyTime = Date.now();
 function startAutoSaveTimer(idx){
+  // Ignore auto-fire events within first 3 seconds of page load (browser state restore)
+  if(Date.now() - _pageReadyTime < 3000) return;
   var resp = (document.getElementById("vresp-"+idx)||{}).value||"";
   if(!resp){ cancelAutoSave(idx); return; } // cleared → cancel
 
