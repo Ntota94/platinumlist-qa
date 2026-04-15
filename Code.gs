@@ -1003,10 +1003,11 @@ function validateDSAT(payload) {
       tagResult = "ok";
     }
     // Post internal note regardless of tag result
-    try { postIntercomNote(row.chat_id, row, validationStatus); } catch(ne) {}
+    var noteResult = "ok";
+    try { postIntercomNote(row.chat_id, row, validationStatus); } catch(ne) { noteResult = "note_error: " + ne.message; }
   } catch(e) { tagResult = "error: " + e.message; }
 
-  return { dsat_id: row.dsat_id, validation_status: validationStatus, tag_result: tagResult };
+  return { dsat_id: row.dsat_id, validation_status: validationStatus, tag_result: tagResult, note_result: noteResult || "skipped" };
 }
 
 // ============================================================
@@ -1111,14 +1112,14 @@ function autoTagIntercom(chatId, validationStatus) {
 function postIntercomNote(chatId, row, validationStatus) {
   if (!chatId) return;
   var s = getSettings();
-  if (!s.intercom_token) return;
+  if (!s.intercom_token) throw new Error("no_token");
   // Get authenticated admin ID
   var me = callIntercomAPI("GET", "me");
   var adminId = String(me.id || "");
-  if (!adminId) return;
-  var statusLabel = validationStatus === "valid" ? "✅ Valid — Agent Fault" : "❌ Invalid — Not Agent Fault";
+  if (!adminId) throw new Error("could not get admin_id from /me: " + JSON.stringify(me).slice(0,100));
+  var statusLabel = validationStatus === "valid" ? "Valid — Agent Fault" : "Invalid — Not Agent Fault";
   var lines = [
-    "<b>🔍 D-SAT Validation</b>",
+    "<b>D-SAT Validation</b>",
     "Status: <b>" + statusLabel + "</b>",
     "Responsible: " + (row.responsible || ""),
   ];
@@ -1127,12 +1128,20 @@ function postIntercomNote(chatId, row, validationStatus) {
   if (row.additional_notes) lines.push("Notes: " + row.additional_notes);
   lines.push("Validated by: " + (row.done_by || row.validated_by || ""));
   lines.push("Date: " + (row.date || ""));
-  callIntercomAPI("POST", "conversations/" + chatId + "/reply", {
-    message_type: "note",
-    type: "admin",
-    admin_id: adminId,
-    body: lines.join("<br/>")
-  });
+  // Try to post note — if conversation is closed, open it first then re-close
+  var noteBody = { message_type: "note", type: "admin", admin_id: adminId, body: lines.join("<br/>") };
+  try {
+    callIntercomAPI("POST", "conversations/" + chatId + "/reply", noteBody);
+  } catch(e) {
+    if (String(e.message).indexOf("closed") > -1 || String(e.message).indexOf("403") > -1 || String(e.message).indexOf("422") > -1) {
+      // Reopen conversation, post note, close again
+      try { callIntercomAPI("PUT", "conversations/" + chatId, { state: "open", admin_id: adminId }); } catch(re) {}
+      callIntercomAPI("POST", "conversations/" + chatId + "/reply", noteBody);
+      try { callIntercomAPI("PUT", "conversations/" + chatId, { state: "closed", admin_id: adminId }); } catch(ce) {}
+    } else {
+      throw e;
+    }
+  }
 }
 
 // ============================================================

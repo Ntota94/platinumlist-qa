@@ -2024,9 +2024,11 @@ function saveVal(idx,goNext){
 
   api("validateDSAT",payload).then(function(r){
     // Show tag result briefly before removing card
-    var tagMsg = r && r.tag_result ? r.tag_result : "";
-    if(tagMsg && tagMsg !== "ok" && tagMsg !== "not_attempted") {
-      if(resultEl) resultEl.innerHTML = '<span class="text-warning">⚠ Intercom tag: '+tagMsg+'</span>';
+    var tagMsg  = r && r.tag_result  ? r.tag_result  : "";
+    var noteMsg = r && r.note_result ? r.note_result : "";
+    var warnMsg = [tagMsg, noteMsg].filter(function(m){ return m && m !== "ok" && m !== "skipped" && m !== "not_attempted"; }).join(" | ");
+    if(warnMsg) {
+      if(resultEl) resultEl.innerHTML = '<span class="text-warning">⚠ '+warnMsg+'</span>';
       setTimeout(function(){
         var el=document.getElementById("qa-item-"+idx);
         if(el) el.remove();
