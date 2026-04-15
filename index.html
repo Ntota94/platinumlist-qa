@@ -633,6 +633,11 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
             <div class="text-muted" style="font-size:.72rem">Leave blank to auto-detect. Get it from Fetch Admins below.</div>
           </div>
           <div class="col-md-3">
+            <label class="form-label fw-semibold small">Manager Admin ID <span class="text-muted fw-normal">(tagged on valid D-SATs)</span></label>
+            <input type="text" id="s-intercom-manager-id" class="form-control form-control-sm" placeholder="e.g. 1234567"/>
+            <div class="text-muted" style="font-size:.72rem">Get from Fetch Admins → click Use next to manager's name.</div>
+          </div>
+          <div class="col-md-3">
             <label class="form-label fw-semibold small">Valid D-sat Tag ID <span class="text-muted fw-normal">(optional)</span></label>
             <input type="text" id="s-intercom-tag-valid" class="form-control form-control-sm" placeholder="e.g. 87654321"/>
           </div>
@@ -2521,6 +2526,8 @@ function loadSettings() {
     if(tvv) tvv.value = s.intercom_tag_valid   || "";
     var aid = document.getElementById("s-intercom-admin-id");
     if(aid) aid.value = s.intercom_admin_id || "";
+    var mid = document.getElementById("s-intercom-manager-id");
+    if(mid) mid.value = s.intercom_manager_id || "";
   }).catch(function(){});
 }
 
@@ -2558,8 +2565,9 @@ function saveIntercomSettings() {
   var tagVal  = (document.getElementById("s-intercom-tag-valid")||{}).value||"";
   var resEl   = document.getElementById("intercom-tags-result");
   resEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
-  var adminId = (document.getElementById("s-intercom-admin-id")||{}).value||"";
-  api("saveSettings", { intercom_token: token, intercom_tag_invalid: tagInv, intercom_tag_valid: tagVal, intercom_admin_id: adminId })
+  var adminId   = (document.getElementById("s-intercom-admin-id")||{}).value||"";
+  var managerId = (document.getElementById("s-intercom-manager-id")||{}).value||"";
+  api("saveSettings", { intercom_token: token, intercom_tag_invalid: tagInv, intercom_tag_valid: tagVal, intercom_admin_id: adminId, intercom_manager_id: managerId })
     .then(function(){ resEl.innerHTML = '<span class="text-success">✓ Saved!</span>'; })
     .catch(function(e){ resEl.innerHTML = '<span class="text-danger">'+e.message+'</span>'; });
 }

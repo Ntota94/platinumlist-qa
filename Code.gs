@@ -1205,7 +1205,31 @@ function postIntercomNote(chatId, row, validationStatus) {
     adminId = String(adminList[0].id || "");
   }
   if (!adminId) throw new Error("could not resolve admin_id");
-  var statusLabel = validationStatus === "valid" ? "Valid — Agent Fault" : "Invalid — Not Agent Fault";
+  var isValid = validationStatus === "valid";
+  var statusLabel = isValid ? "✅ Valid — Agent Fault" : "❌ Invalid — Not Agent Fault";
+
+  // Build @mention tags for manager and agent (valid D-SATs only)
+  var mentions = "";
+  if (isValid) {
+    var managerId = String(s.intercom_manager_id || "").trim();
+    if (managerId) {
+      mentions += '<a class="intercom-mention" data-ref="admin_' + managerId + '">@Manager</a> ';
+    }
+    // Try to find agent's Intercom admin ID by email
+    try {
+      var agents = getAgents();
+      var agentRecord = agents.filter(function(a){ return (a["Agent name"]||"").toLowerCase() === (row.agent_name||"").toLowerCase(); })[0];
+      if (agentRecord && agentRecord["Email"]) {
+        var admins = callIntercomAPI("GET", "admins");
+        var adminList = admins.admins || admins.data || [];
+        var agentAdmin = adminList.filter(function(a){ return (a.email||"").toLowerCase() === agentRecord["Email"].toLowerCase(); })[0];
+        if (agentAdmin) {
+          mentions += '<a class="intercom-mention" data-ref="admin_' + agentAdmin.id + '">@' + (agentAdmin.name||row.agent_name) + '</a> ';
+        }
+      }
+    } catch(me) {}
+  }
+
   var lines = [
     "<b>D-SAT Validation</b>",
     "Status: <b>" + statusLabel + "</b>",
@@ -1216,6 +1240,7 @@ function postIntercomNote(chatId, row, validationStatus) {
   if (row.additional_notes) lines.push("Notes: " + row.additional_notes);
   lines.push("Validated by: " + (row.done_by || row.validated_by || ""));
   lines.push("Date: " + (row.date || ""));
+  if (mentions) lines.push("<br/>" + mentions);
   // Try to post note — if conversation is closed, open it first then re-close
   var noteBody = { message_type: "note", type: "admin", admin_id: adminId, body: lines.join("<br/>") };
   try {
