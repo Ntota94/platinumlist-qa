@@ -1717,13 +1717,16 @@ function loadQueue(){
 
   Promise.all([
     api("getDSATImports", filter),
-    api("getDSATValidations", filter)
+    api("getDSATValidations", filter),
+    api("getDSATValidations", {}) // all validations (no month filter) for pending check
   ]).then(function(res){
     _allImports=res[0]||[];
     _allVals=res[1]||[];
+    var _allValsGlobal=res[2]||[];
 
+    // Use global validations for pending check so date edits don't break status
     var doneIds={};
-    _allVals.forEach(function(v){ doneIds[String(v.chat_id)]=v; });
+    _allValsGlobal.forEach(function(v){ doneIds[String(v.chat_id)]=v; });
     _pendingQ=_allImports.filter(function(i){ return !doneIds[String(i.chat_id)]; });
 
     var nValid   = _allVals.filter(function(v){ return v.validation_status==="valid"; }).length;
