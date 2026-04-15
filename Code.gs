@@ -1024,12 +1024,14 @@ function callIntercomAPI(method, endpoint, body) {
     headers: {
       "Authorization":    "Bearer " + token,
       "Accept":           "application/json",
-      "Content-Type":     "application/json",
       "Intercom-Version": "2.10"
     },
     muteHttpExceptions: true
   };
-  if (body) options.payload = JSON.stringify(body);
+  if (body) {
+    options.contentType = "application/json";
+    options.payload = JSON.stringify(body);
+  }
   var res  = UrlFetchApp.fetch("https://api.intercom.io/" + endpoint, options);
   var code = res.getResponseCode();
   var text = res.getContentText();
