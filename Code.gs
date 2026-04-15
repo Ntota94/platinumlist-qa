@@ -434,7 +434,8 @@ function getAgents() {
       "Agent name":        rowObj["agent name"]        || rowObj["name"]  || "",
       "Email":             rowObj["email"]              || "",
       "online sheet link": rowObj["online sheet link"]  || rowObj["sheet link"] || rowObj["link"] || "",
-      "active":            rowObj["active"]             || "TRUE"
+      "active":            rowObj["active"]             || "TRUE",
+      "intercom_admin_id": rowObj["intercom_admin_id"]  || rowObj["intercom admin id"] || ""
     };
     if (agent["Agent name"]) rows.push(agent);
   }
@@ -445,25 +446,36 @@ function saveAgent(payload) {
   var ss = SpreadsheetApp.openById(SHEET_ID);
   var sheet = ss.getSheetByName(TABS.agents);
   if (!sheet) throw new Error("Agents tab not found");
-  var name  = String(payload.name  || "").trim();
-  var email = String(payload.email || "").trim();
-  var link  = String(payload.link  || "").trim();
+  var name       = String(payload.name       || "").trim();
+  var email      = String(payload.email      || "").trim();
+  var link       = String(payload.link       || "").trim();
+  var intercomId = String(payload.intercom_admin_id || "").trim();
   if (!name) throw new Error("Agent name is required");
 
   var values = sheet.getDataRange().getValues();
   var rawHeaders = values[0].map(function(h){ return String(h).trim().toLowerCase(); });
-  var nameCol  = rawHeaders.indexOf("agent name");
-  var emailCol = rawHeaders.indexOf("email");
-  var linkCol  = rawHeaders.indexOf("online sheet link");
+  var nameCol       = rawHeaders.indexOf("agent name");
+  var emailCol      = rawHeaders.indexOf("email");
+  var linkCol       = rawHeaders.indexOf("online sheet link");
+  var intercomCol   = rawHeaders.indexOf("intercom_admin_id");
   if (nameCol === -1) throw new Error("'Agent name' column not found in Agents tab");
+
+  // If the intercom_admin_id column doesn't exist yet, add it
+  if (intercomCol === -1 && intercomId) {
+    var headerRow = sheet.getRange(1, 1, 1, rawHeaders.length + 1);
+    sheet.getRange(1, rawHeaders.length + 1).setValue("intercom_admin_id");
+    intercomCol = rawHeaders.length;
+    rawHeaders.push("intercom_admin_id");
+  }
 
   // Update existing row
   if (payload.original_name) {
     for (var i = 1; i < values.length; i++) {
       if (String(values[i][nameCol]).trim() === String(payload.original_name).trim()) {
         sheet.getRange(i+1, nameCol+1).setValue(name);
-        if (emailCol !== -1) sheet.getRange(i+1, emailCol+1).setValue(email);
-        if (linkCol  !== -1) sheet.getRange(i+1, linkCol+1).setValue(link);
+        if (emailCol    !== -1) sheet.getRange(i+1, emailCol+1).setValue(email);
+        if (linkCol     !== -1) sheet.getRange(i+1, linkCol+1).setValue(link);
+        if (intercomCol !== -1) sheet.getRange(i+1, intercomCol+1).setValue(intercomId);
         return { saved: true, name: name };
       }
     }
@@ -476,9 +488,10 @@ function saveAgent(payload) {
   }
   var newRow = [];
   for (var j = 0; j < rawHeaders.length; j++) newRow.push("");
-  if (nameCol  !== -1) newRow[nameCol]  = name;
-  if (emailCol !== -1) newRow[emailCol] = email;
-  if (linkCol  !== -1) newRow[linkCol]  = link;
+  if (nameCol       !== -1) newRow[nameCol]       = name;
+  if (emailCol      !== -1) newRow[emailCol]      = email;
+  if (linkCol       !== -1) newRow[linkCol]       = link;
+  if (intercomCol   !== -1) newRow[intercomCol]   = intercomId;
   sheet.appendRow(newRow);
   return { saved: true, name: name, added: true };
 }
@@ -1213,19 +1226,23 @@ function postIntercomNote(chatId, row, validationStatus) {
   if (isValid) {
     var managerId = String(s.intercom_manager_id || "").trim();
     if (managerId) {
-      mentions += '<a class="intercom-mention" data-ref="admin_' + managerId + '">@Manager</a> ';
+      // Look up manager's actual name from Intercom
+      var managerName = "Manager";
+      try {
+        var allAdmins = callIntercomAPI("GET", "admins");
+        var adminList = allAdmins.admins || allAdmins.data || [];
+        var managerAdmin = adminList.filter(function(a){ return String(a.id) === managerId; })[0];
+        if (managerAdmin && managerAdmin.name) managerName = managerAdmin.name;
+      } catch(me) {}
+      mentions += '<a class="intercom-mention" data-ref="admin_' + managerId + '">@' + managerName + '</a> ';
     }
-    // Try to find agent's Intercom admin ID by email
+    // Use stored intercom_admin_id from the Agents sheet (direct, no email-matching)
     try {
       var agents = getAgents();
       var agentRecord = agents.filter(function(a){ return (a["Agent name"]||"").toLowerCase() === (row.agent_name||"").toLowerCase(); })[0];
-      if (agentRecord && agentRecord["Email"]) {
-        var admins = callIntercomAPI("GET", "admins");
-        var adminList = admins.admins || admins.data || [];
-        var agentAdmin = adminList.filter(function(a){ return (a.email||"").toLowerCase() === agentRecord["Email"].toLowerCase(); })[0];
-        if (agentAdmin) {
-          mentions += '<a class="intercom-mention" data-ref="admin_' + agentAdmin.id + '">@' + (agentAdmin.name||row.agent_name) + '</a> ';
-        }
+      var agentIntercomId = agentRecord ? String(agentRecord["intercom_admin_id"] || "").trim() : "";
+      if (agentIntercomId) {
+        mentions += '<a class="intercom-mention" data-ref="admin_' + agentIntercomId + '">@' + (row.agent_name||"Agent") + '</a> ';
       }
     } catch(me) {}
   }
