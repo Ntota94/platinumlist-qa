@@ -992,9 +992,19 @@ function validateDSAT(payload) {
   appendRow(TABS.dsatValidations, DSAT_VALIDATION_HEADERS, row);
 
   // Auto-tag in Intercom (best-effort — does not block save)
-  try { autoTagIntercom(row.chat_id, validationStatus); } catch(e) {}
+  var tagResult = "not_attempted";
+  try {
+    var s = getSettings();
+    var tagId = validationStatus === "valid" ? (s.intercom_tag_valid||"") : (s.intercom_tag_invalid||"");
+    if (!s.intercom_token) { tagResult = "no_token"; }
+    else if (!tagId) { tagResult = "no_tag_id_for_" + validationStatus; }
+    else {
+      autoTagIntercom(row.chat_id, validationStatus);
+      tagResult = "ok";
+    }
+  } catch(e) { tagResult = "error: " + e.message; }
 
-  return { dsat_id: row.dsat_id, validation_status: validationStatus };
+  return { dsat_id: row.dsat_id, validation_status: validationStatus, tag_result: tagResult };
 }
 
 // ============================================================

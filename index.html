@@ -2018,11 +2018,22 @@ function saveVal(idx,goNext){
   if(resultEl) resultEl.textContent="Saving...";
 
   api("validateDSAT",payload).then(function(r){
-    var el=document.getElementById("qa-item-"+idx);
-    if(el) el.remove();
-    _pendingQ.splice(idx,1);
-    // Reload to refresh stats + validated list
-    loadQueue();
+    // Show tag result briefly before removing card
+    var tagMsg = r && r.tag_result ? r.tag_result : "";
+    if(tagMsg && tagMsg !== "ok" && tagMsg !== "not_attempted") {
+      if(resultEl) resultEl.innerHTML = '<span class="text-warning">⚠ Intercom tag: '+tagMsg+'</span>';
+      setTimeout(function(){
+        var el=document.getElementById("qa-item-"+idx);
+        if(el) el.remove();
+        _pendingQ.splice(idx,1);
+        loadQueue();
+      }, 3000);
+    } else {
+      var el=document.getElementById("qa-item-"+idx);
+      if(el) el.remove();
+      _pendingQ.splice(idx,1);
+      loadQueue();
+    }
   }).catch(function(err){
     if(resultEl) resultEl.textContent="Error: "+err.message;
   });
