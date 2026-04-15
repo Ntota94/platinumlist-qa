@@ -114,6 +114,7 @@ function handleClientRequest(jsonStr) {
     else if (action === "getIntercomTags")           result = getIntercomTags();
     else if (action === "getIntercomAdmins")         result = getIntercomAdmins();
     else if (action === "tagIntercomConversation")   result = tagIntercomConversation(payload);
+    else if (action === "testIntercomNoteWebApp")    result = testIntercomNoteWebApp(payload);
     else throw new Error("Unknown action: " + action);
 
     // google.script.run cannot serialize Date objects inside nested objects/arrays.
@@ -172,6 +173,7 @@ function doPost(e) {
     else if (action === "getIntercomTags")           result = getIntercomTags();
     else if (action === "getIntercomAdmins")         result = getIntercomAdmins();
     else if (action === "tagIntercomConversation")   result = tagIntercomConversation(payload);
+    else if (action === "testIntercomNoteWebApp")    result = testIntercomNoteWebApp(payload);
     else throw new Error("Unknown action: " + action);
 
     var safe = JSON.parse(JSON.stringify(result === undefined ? null : result));
@@ -1097,6 +1099,41 @@ function getIntercomConversation(payload) {
 function getIntercomTags() {
   var data = callIntercomAPI("GET", "tags");
   return (data.data || []).map(function(t){ return { id: t.id, name: t.name }; });
+}
+
+function testIntercomNoteWebApp(payload) {
+  var s = getSettings();
+  var adminId = String(s.intercom_admin_id || "").trim();
+  var log = [];
+  log.push("token_set: " + (s.intercom_token ? "yes" : "no"));
+  log.push("admin_id_from_settings: [" + adminId + "]");
+  if (!adminId) {
+    try {
+      var admins = callIntercomAPI("GET", "admins");
+      var list = admins.admins || admins.data || [];
+      adminId = list.length > 0 ? String(list[0].id) : "";
+      log.push("admin_id_from_api: [" + adminId + "]");
+    } catch(e) { log.push("admins_error: " + e.message); }
+  }
+  var convId = String(payload.conversation_id || "").trim();
+  if (!convId) {
+    try {
+      var convs = callIntercomAPI("GET", "conversations?order=desc&per_page=1");
+      convId = (convs.conversations||[])[0] ? String(convs.conversations[0].id) : "";
+      log.push("test_conv_id: " + convId);
+    } catch(e) { log.push("conv_error: " + e.message); }
+  }
+  if (adminId && convId) {
+    try {
+      var body = { message_type: "note", type: "admin", admin_id: adminId, body: "<b>[QA Test Note — safe to delete]</b>" };
+      log.push("posting_body: " + JSON.stringify(body));
+      callIntercomAPI("POST", "conversations/" + convId + "/reply", body);
+      log.push("result: SUCCESS");
+    } catch(e) { log.push("result: FAILED — " + e.message); }
+  } else {
+    log.push("result: SKIPPED — missing adminId or convId");
+  }
+  return { log: log };
 }
 
 function testIntercomNote() {

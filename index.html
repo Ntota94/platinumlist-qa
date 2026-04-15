@@ -641,6 +641,7 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
           <button class="btn btn-sm btn-accent" onclick="saveIntercomSettings()"><i class="bi bi-save me-1"></i>Save Intercom Settings</button>
           <button class="btn btn-sm btn-outline-secondary" onclick="loadIntercomTagsList()"><i class="bi bi-tags me-1"></i>Fetch Tag IDs</button>
           <button class="btn btn-sm btn-outline-secondary" onclick="loadIntercomAdminsList()"><i class="bi bi-person-badge me-1"></i>Fetch Admins</button>
+          <button class="btn btn-sm btn-outline-danger" onclick="testIntercomNoteBtn()"><i class="bi bi-bug me-1"></i>Test Note Post</button>
           <div id="intercom-tags-result" class="small text-muted"></div>
         </div>
         <div id="intercom-tags-table" class="mt-2"></div>
@@ -2478,6 +2479,17 @@ function loadSettings() {
     var aid = document.getElementById("s-intercom-admin-id");
     if(aid) aid.value = s.intercom_admin_id || "";
   }).catch(function(){});
+}
+
+function testIntercomNoteBtn(){
+  var resEl = document.getElementById("intercom-tags-result");
+  resEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Testing note post via web app...';
+  api("testIntercomNoteWebApp", {}).then(function(r){
+    var log = (r && r.log) ? r.log : ["no log returned"];
+    document.getElementById("intercom-tags-table").innerHTML =
+      '<div class="alert alert-info mt-2 small"><b>Web App Test Log:</b><br/>' + log.map(function(l){ return esc(l); }).join('<br/>') + '</div>';
+    resEl.innerHTML = '';
+  }).catch(function(e){ resEl.innerHTML = '<span class="text-danger">'+e.message+'</span>'; });
 }
 
 function loadIntercomAdminsList(){
