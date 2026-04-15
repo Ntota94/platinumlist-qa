@@ -1077,6 +1077,43 @@ function renderUsersTable() {
 
 function esc(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
+// ── Searchable Select ─────────────────────────────────────────
+function buildSearchableSelect(id, options, placeholder, onchangeCall, selectedVal) {
+  var selLabel = "";
+  for(var i=0;i<options.length;i++){ if(options[i].value===selectedVal){ selLabel=options[i].label; break; } }
+  var optsHtml = options.map(function(o){
+    return '<div class="ss-opt px-2 py-1 small" style="cursor:pointer" '+
+      'data-val="'+esc(o.value)+'" data-label="'+esc(o.label)+'" '+
+      'onmousedown="ssSelect(\''+id+'\',\''+esc(o.value).replace(/'/g,"\\'")+'\',\''+esc(o.label).replace(/'/g,"\\'")+'\''+(onchangeCall?",'"+onchangeCall+"'":'')+')">'
+      +esc(o.label)+'</div>';
+  }).join('');
+  return '<div class="ss-wrap position-relative">'+
+    '<input type="text" class="form-control form-control-sm" id="ss-inp-'+id+'" '+
+      'placeholder="'+esc(placeholder)+'" autocomplete="off" value="'+esc(selLabel)+'" '+
+      'oninput="ssFilter(\''+id+'\')" onfocus="ssOpen(\''+id+'\')" '+
+      'onblur="setTimeout(function(){ssClose(\''+id+'\')},200)" />'+
+    '<input type="hidden" id="'+id+'" value="'+esc(selectedVal||'')+'"/>'+
+    '<div id="ss-dd-'+id+'" class="ss-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:1050;background:#fff;border:1px solid #dee2e6;border-radius:4px;max-height:180px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.12)">'+
+    optsHtml+'</div></div>';
+}
+function ssFilter(id){
+  var q=(document.getElementById('ss-inp-'+id)||{}).value||'';
+  var dd=document.getElementById('ss-dd-'+id); if(!dd) return;
+  dd.style.display='block';
+  Array.from(dd.querySelectorAll('.ss-opt')).forEach(function(el){
+    el.style.display=el.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';
+  });
+}
+function ssOpen(id){ var dd=document.getElementById('ss-dd-'+id); if(dd) dd.style.display='block'; }
+function ssClose(id){ var dd=document.getElementById('ss-dd-'+id); if(dd) dd.style.display='none'; }
+function ssSelect(id,val,label,onchangeCall){
+  var inp=document.getElementById('ss-inp-'+id); if(inp) inp.value=label;
+  var hid=document.getElementById(id); if(hid) hid.value=val;
+  ssClose(id);
+  if(onchangeCall){ try{ eval(onchangeCall); }catch(e){} }
+}
+function ssGetValue(id){ return (document.getElementById(id)||{}).value||''; }
+
 function showAddUserForm() { document.getElementById("add-user-form").style.display = "block"; document.getElementById("nu-name").focus(); }
 function hideAddUserForm() { document.getElementById("add-user-form").style.display = "none"; document.getElementById("add-user-err").style.display="none"; }
 
@@ -1890,7 +1927,9 @@ function buildValCard(imp, idx, issueOpts, startOpen){
         // Agent Issue Type (shown only when Agent selected)
         '<div class="col-md-3" id="issue-wrap-'+idx+'" style="display:none">'+
           '<label class="form-label fw-semibold small">Agent Issue Type <span class="text-danger">*</span></label>'+
-          '<select class="form-select form-select-sm" id="vissue-'+idx+'">'+issueOpts+'</select>'+
+          buildSearchableSelect('vissue-'+idx, (_issueTypes||[]).map(function(it){
+            var v=it["Agent Issue Type"]||it.agent_issue_type||""; return {value:v,label:v};
+          }).filter(function(o){return o.value;}), "Search issue type...", null, "")+
         '</div>'+
 
         // Actionable Steps (shown only when Agent selected)
@@ -1902,7 +1941,8 @@ function buildValCard(imp, idx, issueOpts, startOpen){
         // Transaction Type (optional)
         '<div class="col-md-3">'+
           '<label class="form-label fw-semibold small">Transaction Type <span class="text-muted fw-normal">(optional)</span></label>'+
-          '<select class="form-select form-select-sm" id="vtxtype-'+idx+'">'+txOpts+'</select>'+
+          buildSearchableSelect('vtxtype-'+idx, TX_TYPES.map(function(t){return{value:t,label:t};}),
+            "Search type...", null, imp.transaction_type||"")+
         '</div>'+
 
         // Additional Notes -- always visible
@@ -2553,12 +2593,29 @@ function loadIntercomConversation(idx, chatId) {
     .catch(function(err){ panel.innerHTML = '<div class="conv-error"><i class="bi bi-exclamation-circle me-1"></i>'+err.message+'</div>'; });
 }
 
+function getChannelIcon(type) {
+  var t = String(type||"").toLowerCase();
+  if(t==="email")     return '<i class="bi bi-envelope-fill me-1 text-primary"></i>Email';
+  if(t==="chat")      return '<i class="bi bi-chat-fill me-1 text-success"></i>Live Chat';
+  if(t==="facebook")  return '<i class="bi bi-facebook me-1" style="color:#1877f2"></i>Facebook';
+  if(t==="instagram") return '<i class="bi bi-instagram me-1" style="color:#e1306c"></i>Instagram';
+  if(t==="twitter")   return '<i class="bi bi-twitter-x me-1 text-dark"></i>Twitter/X';
+  if(t==="whatsapp")  return '<i class="bi bi-whatsapp me-1 text-success"></i>WhatsApp';
+  if(t==="sms")       return '<i class="bi bi-phone-fill me-1 text-warning"></i>SMS';
+  if(t==="push")      return '<i class="bi bi-bell-fill me-1 text-warning"></i>Push';
+  if(t==="phone_call") return '<i class="bi bi-telephone-fill me-1 text-info"></i>Phone Call';
+  if(t)               return '<i class="bi bi-chat-dots me-1"></i>'+esc(t);
+  return '';
+}
+
 function renderConversation(conv) {
   var html = "";
   // Customer info header
   var c = conv.customer || {};
   html += '<div class="conv-customer-info">';
-  html += '<div class="ci-name">'+(c.name||"Unknown customer")+'</div>';
+  html += '<div class="ci-name">'+(c.name||"Unknown customer");
+  if(conv.source_type) html += ' <span class="badge ms-2" style="background:#f0f0f0;color:#444;font-size:.7rem;font-weight:500">'+getChannelIcon(conv.source_type)+'</span>';
+  html += '</div>';
   html += '<div class="ci-meta">';
   if(c.email) html += '<i class="bi bi-envelope me-1"></i>'+esc(c.email)+'&nbsp;&nbsp;';
   if(c.phone) html += '<i class="bi bi-telephone me-1"></i>'+esc(c.phone)+'&nbsp;&nbsp;';

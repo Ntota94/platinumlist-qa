@@ -1060,9 +1060,10 @@ function getIntercomConversation(payload) {
   }
 
   // Source info
-  var sourceUrl = (data.source && data.source.url) ? data.source.url : "";
-  var browser   = (data.source && data.source.browser) ? data.source.browser : "";
-  var os        = (data.source && data.source.os) ? data.source.os : "";
+  var sourceUrl  = (data.source && data.source.url)     ? data.source.url     : "";
+  var browser    = (data.source && data.source.browser) ? data.source.browser : "";
+  var os         = (data.source && data.source.os)      ? data.source.os      : "";
+  var sourceType = (data.source && data.source.type)    ? data.source.type    : "";
 
   // Messages
   var messages = [];
@@ -1092,7 +1093,8 @@ function getIntercomConversation(payload) {
 
   return {
     id: convId, customer: customer, source_url: sourceUrl,
-    browser: browser, os: os, messages: messages, tags: tags, state: data.state || ""
+    browser: browser, os: os, source_type: sourceType,
+    messages: messages, tags: tags, state: data.state || ""
   };
 }
 
