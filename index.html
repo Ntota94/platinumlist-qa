@@ -628,13 +628,19 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
             <input type="text" id="s-intercom-tag-invalid" class="form-control form-control-sm" placeholder="e.g. 12345678"/>
           </div>
           <div class="col-md-3">
+            <label class="form-label fw-semibold small">Your Admin ID <span class="text-muted fw-normal">(for notes)</span></label>
+            <input type="text" id="s-intercom-admin-id" class="form-control form-control-sm" placeholder="e.g. 6543210"/>
+            <div class="text-muted" style="font-size:.72rem">Leave blank to auto-detect. Get it from Fetch Admins below.</div>
+          </div>
+          <div class="col-md-3">
             <label class="form-label fw-semibold small">Valid D-sat Tag ID <span class="text-muted fw-normal">(optional)</span></label>
             <input type="text" id="s-intercom-tag-valid" class="form-control form-control-sm" placeholder="e.g. 87654321"/>
           </div>
         </div>
         <div class="d-flex gap-2 align-items-center flex-wrap">
           <button class="btn btn-sm btn-accent" onclick="saveIntercomSettings()"><i class="bi bi-save me-1"></i>Save Intercom Settings</button>
-          <button class="btn btn-sm btn-outline-secondary" onclick="loadIntercomTagsList()"><i class="bi bi-tags me-1"></i>Fetch Tag IDs from Intercom</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="loadIntercomTagsList()"><i class="bi bi-tags me-1"></i>Fetch Tag IDs</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="loadIntercomAdminsList()"><i class="bi bi-person-badge me-1"></i>Fetch Admins</button>
           <div id="intercom-tags-result" class="small text-muted"></div>
         </div>
         <div id="intercom-tags-table" class="mt-2"></div>
@@ -2469,7 +2475,25 @@ function loadSettings() {
     if(it)  it.value  = s.intercom_token     || "";
     if(tiv) tiv.value = s.intercom_tag_invalid || "";
     if(tvv) tvv.value = s.intercom_tag_valid   || "";
+    var aid = document.getElementById("s-intercom-admin-id");
+    if(aid) aid.value = s.intercom_admin_id || "";
   }).catch(function(){});
+}
+
+function loadIntercomAdminsList(){
+  var resEl = document.getElementById("intercom-tags-result");
+  resEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Fetching admins...';
+  api("getIntercomAdmins").then(function(admins){
+    if(!admins||!admins.length){ resEl.innerHTML='<span class="text-warning">No admins found</span>'; return; }
+    resEl.innerHTML = '';
+    var tbl = '<table class="table table-sm table-bordered mt-2" style="font-size:.8rem"><thead class="table-light"><tr><th>NAME</th><th>EMAIL</th><th>ID</th><th></th></tr></thead><tbody>';
+    admins.forEach(function(a){
+      tbl += '<tr><td>'+esc(a.name||'')+'</td><td>'+esc(a.email||'')+'</td><td class="font-monospace">'+esc(String(a.id))+'</td>'+
+        '<td><button class="btn btn-xs btn-outline-primary py-0 px-1" style="font-size:.72rem" onclick="document.getElementById(\'s-intercom-admin-id\').value=\''+esc(String(a.id))+'\'">Use</button></td></tr>';
+    });
+    tbl += '</tbody></table>';
+    document.getElementById("intercom-tags-table").innerHTML = tbl;
+  }).catch(function(e){ resEl.innerHTML='<span class="text-danger">'+e.message+'</span>'; });
 }
 
 // ── Intercom Settings ────────────────────────────────────────
@@ -2479,7 +2503,8 @@ function saveIntercomSettings() {
   var tagVal  = (document.getElementById("s-intercom-tag-valid")||{}).value||"";
   var resEl   = document.getElementById("intercom-tags-result");
   resEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
-  api("saveSettings", { intercom_token: token, intercom_tag_invalid: tagInv, intercom_tag_valid: tagVal })
+  var adminId = (document.getElementById("s-intercom-admin-id")||{}).value||"";
+  api("saveSettings", { intercom_token: token, intercom_tag_invalid: tagInv, intercom_tag_valid: tagVal, intercom_admin_id: adminId })
     .then(function(){ resEl.innerHTML = '<span class="text-success">✓ Saved!</span>'; })
     .catch(function(e){ resEl.innerHTML = '<span class="text-danger">'+e.message+'</span>'; });
 }

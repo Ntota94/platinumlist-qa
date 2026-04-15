@@ -112,6 +112,7 @@ function handleClientRequest(jsonStr) {
     else if (action === "createAgentMonthTab")       result = createAgentMonthTab(payload);
     else if (action === "getIntercomConversation")   result = getIntercomConversation(payload);
     else if (action === "getIntercomTags")           result = getIntercomTags();
+    else if (action === "getIntercomAdmins")         result = getIntercomAdmins();
     else if (action === "tagIntercomConversation")   result = tagIntercomConversation(payload);
     else throw new Error("Unknown action: " + action);
 
@@ -169,6 +170,7 @@ function doPost(e) {
     else if (action === "createAgentMonthTab")       result = createAgentMonthTab(payload);
     else if (action === "getIntercomConversation")   result = getIntercomConversation(payload);
     else if (action === "getIntercomTags")           result = getIntercomTags();
+    else if (action === "getIntercomAdmins")         result = getIntercomAdmins();
     else if (action === "tagIntercomConversation")   result = tagIntercomConversation(payload);
     else throw new Error("Unknown action: " + action);
 
@@ -1095,6 +1097,12 @@ function getIntercomTags() {
   return (data.data || []).map(function(t){ return { id: t.id, name: t.name }; });
 }
 
+function getIntercomAdmins() {
+  var data = callIntercomAPI("GET", "admins");
+  var list = data.admins || data.data || [];
+  return list.map(function(a){ return { id: a.id, name: a.name || "", email: a.email || "" }; });
+}
+
 function tagIntercomConversation(payload) {
   var convId = String(payload.conversation_id || "").trim();
   var tagId  = String(payload.tag_id          || "").trim();
@@ -1113,10 +1121,15 @@ function postIntercomNote(chatId, row, validationStatus) {
   if (!chatId) return;
   var s = getSettings();
   if (!s.intercom_token) throw new Error("no_token");
-  // Get authenticated admin ID
-  var me = callIntercomAPI("GET", "me");
-  var adminId = String(me.id || "");
-  if (!adminId) throw new Error("could not get admin_id from /me: " + JSON.stringify(me).slice(0,100));
+  // Get admin ID — use saved setting first, else fetch from /admins
+  var adminId = String(s.intercom_admin_id || "").trim();
+  if (!adminId) {
+    var admins = callIntercomAPI("GET", "admins");
+    var adminList = admins.admins || admins.data || [];
+    if (adminList.length === 0) throw new Error("no admins found in workspace");
+    adminId = String(adminList[0].id || "");
+  }
+  if (!adminId) throw new Error("could not resolve admin_id");
   var statusLabel = validationStatus === "valid" ? "Valid — Agent Fault" : "Invalid — Not Agent Fault";
   var lines = [
     "<b>D-SAT Validation</b>",
