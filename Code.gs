@@ -1106,12 +1106,30 @@ function testIntercomNote() {
   Logger.log("Admin ID from settings: [" + (s.intercom_admin_id || "") + "]");
   try {
     var admins = callIntercomAPI("GET", "admins");
-    Logger.log("Admins raw response: " + JSON.stringify(admins).slice(0, 500));
     var list = admins.admins || admins.data || [];
     Logger.log("Admin list length: " + list.length);
-    if (list.length > 0) Logger.log("First admin: " + JSON.stringify(list[0]));
+    // Check if saved admin ID exists in list
+    var found = list.filter(function(a){ return String(a.id) === String(s.intercom_admin_id); });
+    Logger.log("Saved admin ID in list: " + (found.length > 0 ? "YES — " + found[0].name : "NO — not found"));
   } catch(e) {
     Logger.log("Error calling /admins: " + e.message);
+  }
+  // Test actual note posting using first conversation
+  try {
+    var convs = callIntercomAPI("GET", "conversations?order=desc&sort=updated_at&per_page=1");
+    var testConvId = (convs.conversations||[])[0] ? convs.conversations[0].id : null;
+    Logger.log("Test conversation ID: " + testConvId);
+    if (testConvId && s.intercom_admin_id) {
+      var result = callIntercomAPI("POST", "conversations/" + testConvId + "/reply", {
+        message_type: "note",
+        type: "admin",
+        admin_id: String(s.intercom_admin_id),
+        body: "<b>[QA Tool Test Note — safe to delete]</b>"
+      });
+      Logger.log("Note POST result: " + JSON.stringify(result).slice(0, 200));
+    }
+  } catch(e) {
+    Logger.log("Note POST error: " + e.message);
   }
 }
 
