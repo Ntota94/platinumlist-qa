@@ -136,6 +136,32 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
 .changelog-item .ch-date { font-size:.76rem; color:#888; margin-left:8px; }
 .changelog-item .ch-by { font-size:.76rem; color:var(--brand-light); font-weight:600; }
 
+/* ── AI Analysis Panel ────────────────────────────────────── */
+.ai-panel { background:#fff; border:2px solid #e8e0ff; border-radius:10px; overflow:hidden; margin-top:10px; }
+.ai-panel-hdr { background:linear-gradient(135deg,#6B00EE15,#4DD9FF20); padding:8px 14px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #e8e0ff; }
+.ai-panel-hdr .ai-ttl { font-weight:700; color:#4A00BB; font-size:.88rem; }
+.ai-section { padding:10px 14px; border-bottom:1px solid #f5f0ff; }
+.ai-section:last-child { border-bottom:none; }
+.ai-section-title { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#9966cc; margin-bottom:7px; display:flex; align-items:center; gap:5px; }
+.order-badge { background:#e8f4fd; color:#1565c0; border:1px solid #90caf9; border-radius:6px; padding:2px 9px; font-family:monospace; font-size:.82rem; font-weight:600; display:inline-block; margin:2px; }
+.kw-badge { border-radius:12px; padding:2px 9px; font-size:.76rem; font-weight:600; display:inline-block; margin:2px; }
+.kw-refund    { background:#ffe3e3; color:#c0392b; }
+.kw-postponed,.kw-cancelled { background:#fff3cd; color:#9c6f00; }
+.kw-complaint,.kw-escalation { background:#f8d7da; color:#721c24; }
+.kw-event     { background:#d4edda; color:#155724; }
+.kw-verification,.kw-payment { background:#cce5ff; color:#004085; }
+.kw-booking,.kw-account { background:#e2e3ff; color:#2c2c8f; }
+.kw-wrong_info { background:#ffe8cc; color:#7a3b00; }
+.kw-other     { background:#e2d9f3; color:#4A00BB; }
+.issue-flag { background:#fff5f5; border:1px solid #ffcccc; border-radius:7px; padding:6px 10px; margin:3px 0; }
+.issue-flag .if-name { font-weight:600; font-size:.79rem; color:#c0392b; }
+.issue-flag .if-reason { font-size:.74rem; color:#666; margin-top:2px; }
+[data-theme="dark"] .ai-panel { background:#1a1a2e; border-color:#3a2a60; }
+[data-theme="dark"] .ai-panel-hdr { background:linear-gradient(135deg,#6B00EE25,#4DD9FF15); border-color:#3a2a60; }
+[data-theme="dark"] .ai-section { border-color:#2e2050; }
+[data-theme="dark"] .issue-flag { background:#2a1020; border-color:#5a2040; }
+[data-theme="dark"] .issue-flag .if-reason { color:#9999aa; }
+
 /* ── Intercom conversation viewer ─────────────────────────── */
 .conv-panel { border-left:1px solid #e5e0f8; background:#f9f9ff; max-height:480px; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; }
 .conv-customer-info { background:#fff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; font-size:.8rem; margin-bottom:4px; }
@@ -760,6 +786,24 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
       </div>
     </div>
 
+    <!-- Claude AI Settings -->
+    <div class="col-12">
+      <div class="card card-m p-3" style="border-top:3px solid #7c3aed">
+        <h6 class="fw-bold mb-3"><i class="bi bi-stars me-2" style="color:#7c3aed"></i>AI Analysis (Claude)</h6>
+        <div class="row g-2 align-items-end">
+          <div class="col-md-8">
+            <label class="form-label fw-semibold small">Claude API Key <span class="text-muted fw-normal">(from console.anthropic.com → API Keys)</span></label>
+            <input type="password" id="s-claude-api-key" class="form-control form-control-sm" placeholder="sk-ant-..."/>
+            <div class="text-muted" style="font-size:.72rem">Used for AI conversation analysis in the Validation Queue. Your key is stored securely in the Google Sheet.</div>
+          </div>
+          <div class="col-md-4 pt-3">
+            <button class="btn btn-sm btn-outline-secondary w-100" onclick="saveClaudeKey()"><i class="bi bi-save me-1"></i>Save Claude API Key</button>
+            <div id="claude-key-result" class="small mt-1"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Export Data -->
     <div class="col-12">
       <div class="card card-m p-3">
@@ -1031,7 +1075,7 @@ function setupSidebar(){
 // SCRIPT_URL: paste your Apps Script deployment URL here when
 // hosting on GitHub Pages. Leave empty when served via Apps Script.
 // ─────────────────────────────────────────────────────────────
-var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz17mBKmIigG9RL1gBScAPBS9PvRZdsaO1zf4-n5Ab6sLFYoOIzep0z4_4WFmU47xMW/exec";
+var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwLNqp3649lDk95duznoXomI2IRNO8qyn2N8QBI0AZA8xYu8hycE0oZWvffXaz-QezG/exec";
 
 function api(action, payload){
   // ── Inside Apps Script web app: use google.script.run (fastest, no CORS)
@@ -2043,8 +2087,11 @@ function buildValCard(imp, idx, issueOpts, startOpen){
       '<span class="fw-bold">'+agentName+'</span>'+
       '<span class="text-muted small ms-2"><i class="bi bi-calendar3 me-1"></i>'+dateStr+'</span>'+
       '<span class="badge bg-light text-dark border ms-2 small font-monospace">'+chatId+'</span>'+
-      '<a href="'+intercomUrl+'" target="_blank" class="btn btn-sm btn-outline-primary ms-auto">'+
-        '<i class="bi bi-box-arrow-up-right me-1"></i>Open in Intercom</a>'+
+      '<div class="ms-auto d-flex gap-2">'+
+        '<button class="btn btn-sm btn-outline-secondary" onclick="analyzeConv('+idx+')" id="ai-btn-'+idx+'"><i class="bi bi-stars me-1"></i>Analyze</button>'+
+        '<a href="'+intercomUrl+'" target="_blank" class="btn btn-sm btn-outline-primary">'+
+          '<i class="bi bi-box-arrow-up-right me-1"></i>Open in Intercom</a>'+
+      '</div>'+
     '</div>'+
 
     // Split layout: form (left) + conversation (right)
@@ -2114,9 +2161,12 @@ function buildValCard(imp, idx, issueOpts, startOpen){
       '</div>'+
     '</div>'+
 
-    // RIGHT — Conversation panel
-    '<div class="conv-panel" id="conv-panel-'+idx+'" style="flex:1;min-width:0">'+
-      '<div class="conv-loading"><span class="spinner-border spinner-border-sm me-2"></span>Loading conversation...</div>'+
+    // RIGHT — Conversation panel + AI panel
+    '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;padding:8px">'+
+      '<div class="conv-panel" id="conv-panel-'+idx+'" style="flex:1">'+
+        '<div class="conv-loading"><span class="spinner-border spinner-border-sm me-2"></span>Loading conversation...</div>'+
+      '</div>'+
+      '<div id="ai-panel-'+idx+'" style="display:none"></div>'+
     '</div>'+
 
     '</div>'
@@ -2642,6 +2692,9 @@ function loadSettings() {
     var aid = document.getElementById("s-intercom-admin-id");
     if(aid) aid.value = s.intercom_admin_id || "";
     var mid = document.getElementById("s-intercom-manager-id");
+    // Load Claude API key
+    var ck = document.getElementById("s-claude-api-key");
+    if(ck) ck.value = s.claude_api_key || "";
     if(mid) mid.value = s.intercom_manager_id || "";
   }).catch(function(){});
 }
@@ -2671,6 +2724,16 @@ function loadIntercomAdminsList(){
     tbl += '</tbody></table>';
     document.getElementById("intercom-tags-table").innerHTML = tbl;
   }).catch(function(e){ resEl.innerHTML='<span class="text-danger">'+e.message+'</span>'; });
+}
+
+// ── Claude API Key ────────────────────────────────────────────
+function saveClaudeKey() {
+  var key   = (document.getElementById("s-claude-api-key")||{}).value||"";
+  var resEl = document.getElementById("claude-key-result");
+  if(resEl) resEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+  api("saveSettings", { claude_api_key: key })
+    .then(function(){ if(resEl) resEl.innerHTML = '<span class="text-success">✓ Saved!</span>'; })
+    .catch(function(e){ if(resEl) resEl.innerHTML = '<span class="text-danger">'+e.message+'</span>'; });
 }
 
 // ── Intercom Settings ────────────────────────────────────────
@@ -2703,6 +2766,8 @@ function loadIntercomTagsList() {
 }
 
 // ── Intercom Conversation Viewer ─────────────────────────────
+var _convStore = {}; // stores loaded conversation data by idx
+
 function loadIntercomConversation(idx, chatId) {
   var panel = document.getElementById("conv-panel-"+idx);
   if (!panel) return;
@@ -2712,8 +2777,83 @@ function loadIntercomConversation(idx, chatId) {
   }
   panel.innerHTML = '<div class="conv-loading"><span class="spinner-border spinner-border-sm me-2"></span>Loading conversation...</div>';
   api("getIntercomConversation", { conversation_id: chatId })
-    .then(function(conv){ panel.innerHTML = renderConversation(conv); })
+    .then(function(conv){
+      _convStore[idx] = conv; // store for AI analysis
+      panel.innerHTML = renderConversation(conv);
+    })
     .catch(function(err){ panel.innerHTML = '<div class="conv-error"><i class="bi bi-exclamation-circle me-1"></i>'+err.message+'</div>'; });
+}
+
+function analyzeConv(idx) {
+  var conv = _convStore[idx];
+  var aiPanel = document.getElementById("ai-panel-"+idx);
+  var aiBtn   = document.getElementById("ai-btn-"+idx);
+  if (!aiPanel) return;
+
+  if (!conv || !conv.messages || !conv.messages.length) {
+    aiPanel.style.display = "block";
+    aiPanel.innerHTML = '<div class="alert alert-warning py-2 small mt-1">Conversation not loaded yet. Wait for it to load first.</div>';
+    return;
+  }
+
+  // Show loading
+  aiPanel.style.display = "block";
+  aiPanel.innerHTML = '<div class="ai-panel"><div class="ai-panel-hdr"><i class="bi bi-stars" style="color:#4DD9FF"></i><span class="ai-ttl">Analyzing...</span><span class="spinner-border spinner-border-sm ms-2" style="width:14px;height:14px"></span></div></div>';
+  if (aiBtn) { aiBtn.disabled = true; aiBtn.innerHTML = '<span class="spinner-border spinner-border-sm" style="width:12px;height:12px"></span>'; }
+
+  var agentName = (_pendingQ[idx] || {}).agent_name || "";
+  api("analyzeConversation", { messages: conv.messages, agent_name: agentName })
+    .then(function(result){
+      if (aiBtn) { aiBtn.disabled = false; aiBtn.innerHTML = '<i class="bi bi-stars me-1"></i>Analyze'; }
+      aiPanel.innerHTML = renderAIPanel(result);
+    })
+    .catch(function(err){
+      if (aiBtn) { aiBtn.disabled = false; aiBtn.innerHTML = '<i class="bi bi-stars me-1"></i>Analyze'; }
+      aiPanel.innerHTML = '<div class="alert alert-danger py-2 small mt-1"><i class="bi bi-exclamation-circle me-1"></i>'+esc(err.message)+'</div>';
+    });
+}
+
+function renderAIPanel(r) {
+  var html = '<div class="ai-panel">';
+  html += '<div class="ai-panel-hdr"><i class="bi bi-stars" style="color:#4DD9FF;font-size:1rem"></i><span class="ai-ttl">AI Quality Analysis</span><span class="badge ms-auto" style="background:#e8e0ff;color:#4A00BB;font-size:.68rem">Claude AI</span></div>';
+
+  // Order numbers
+  var orders = r.order_numbers || [];
+  html += '<div class="ai-section"><div class="ai-section-title"><i class="bi bi-hash"></i> Order / Reference Numbers</div>';
+  if (!orders.length || (orders.length===1 && orders[0]==="N/A")) {
+    html += '<span class="badge bg-light text-muted border">N/A — not mentioned</span>';
+  } else {
+    orders.forEach(function(o){ html += '<span class="order-badge">'+esc(o)+'</span>'; });
+  }
+  html += '</div>';
+
+  // Keywords
+  var kws = r.keywords || [];
+  html += '<div class="ai-section"><div class="ai-section-title"><i class="bi bi-tags"></i> Key Topics Detected</div>';
+  if (!kws.length) {
+    html += '<span class="text-muted small">No key topics detected.</span>';
+  } else {
+    kws.forEach(function(k){
+      var cat = (k.category||"other").toLowerCase().replace(/[^a-z_]/g,"");
+      html += '<span class="kw-badge kw-'+cat+'">'+esc(k.text)+'</span>';
+    });
+  }
+  html += '</div>';
+
+  // Issue types
+  var issues = r.issue_types || [];
+  html += '<div class="ai-section"><div class="ai-section-title"><i class="bi bi-exclamation-triangle"></i> Suggested Issue Types</div>';
+  if (!issues.length) {
+    html += '<div class="text-success small"><i class="bi bi-check-circle me-1"></i>No issues detected in this interaction.</div>';
+  } else {
+    issues.forEach(function(it){
+      html += '<div class="issue-flag"><div class="if-name">⚠ '+esc(it.name||"")+'</div><div class="if-reason">'+esc(it.reason||"")+'</div></div>';
+    });
+  }
+  html += '</div>';
+
+  html += '</div>';
+  return html;
 }
 
 function getChannelIcon(type) {
