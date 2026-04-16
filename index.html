@@ -1031,7 +1031,7 @@ function setupSidebar(){
 // SCRIPT_URL: paste your Apps Script deployment URL here when
 // hosting on GitHub Pages. Leave empty when served via Apps Script.
 // ─────────────────────────────────────────────────────────────
-var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzBZMknX0o8b320pVIdpC80s10KGYujP9BFYiJq_lAFOb2R-wAAXpdCIXsrpLBPYWKT/exec";
+var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz17mBKmIigG9RL1gBScAPBS9PvRZdsaO1zf4-n5Ab6sLFYoOIzep0z4_4WFmU47xMW/exec";
 
 function api(action, payload){
   // ── Inside Apps Script web app: use google.script.run (fastest, no CORS)
@@ -3093,8 +3093,12 @@ function saveAllPending(){
   });
 
   if(toSave.length===0){
-    alert("No cards are fully filled.\nPlease select Responsible (and Agent Issue Type when responsible = Agent) on at least one card.");
+    alert("No cards are fully filled.\nPlease select Responsible (and Agent Issue Type if Agent) on at least one card.");
     return;
+  }
+  if(missing.length){
+    var ok = confirm("⚠ "+missing.length+" card(s) are missing Responsible and will be SKIPPED:\nCards: #"+missing.join(", #")+"\n\nContinue saving the "+toSave.length+" filled card(s)?");
+    if(!ok) return;
   }
 
   var savBtn=document.getElementById("save-all-btn");
