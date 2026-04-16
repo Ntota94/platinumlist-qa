@@ -384,6 +384,33 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
 <div class="tab-pane active" id="tab-qa-entry">
   <h4 class="mb-3"><i class="bi bi-pencil-square me-2 text-primary"></i>New QA Evaluation</h4>
 
+  <!-- ── Call Recording Analysis (optional) ── -->
+  <div class="card card-m mb-3" id="callAnalysisCard" style="border-top:3px solid #10a37f">
+    <div class="card-header d-flex align-items-center gap-2 py-2" style="cursor:pointer;background:transparent" onclick="toggleCallPanel()">
+      <i class="bi bi-mic-fill" style="color:#10a37f"></i>
+      <span class="fw-semibold small">Call Recording Analysis</span>
+      <span class="badge bg-light text-muted border ms-1" style="font-size:.68rem">optional · AI-powered</span>
+      <i class="bi bi-chevron-down ms-auto" id="callPanelChevron" style="transition:.2s"></i>
+    </div>
+    <div id="callAnalysisBody" style="display:none" class="p-3 pt-2">
+      <div class="row g-2 align-items-end mb-2">
+        <div class="col-md-8">
+          <label class="form-label fw-semibold small mb-1">Upload Call Recording</label>
+          <input type="file" class="form-control form-control-sm" id="callRecordingFile" accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm" onchange="onCallFileSelected()"/>
+          <div class="text-muted" style="font-size:.72rem">MP3 · WAV · M4A · OGG · Max ~25 MB · Arabic &amp; English supported</div>
+        </div>
+        <div class="col-md-4">
+          <button class="btn btn-sm w-100" id="transcribeBtn" onclick="transcribeCall()" disabled
+            style="background:#10a37f;color:#fff;border:none">
+            <i class="bi bi-soundwave me-1"></i>Transcribe &amp; Analyze
+          </button>
+        </div>
+      </div>
+      <!-- Result area -->
+      <div id="callAnalysisResult" style="display:none"></div>
+    </div>
+  </div>
+
   <div class="card card-m p-3 mb-3">
     <div class="row g-3">
 
@@ -783,6 +810,24 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
         </div>
         <div id="intercom-tags-table" class="mt-2"></div>
         <div class="text-muted small mt-2">The tag will be added to the Intercom conversation automatically when you save a validation. Get your token from <a href="https://app.intercom.com/a/apps/_/developer-hub" target="_blank">Intercom Developer Hub <i class="bi bi-box-arrow-up-right"></i></a></div>
+      </div>
+    </div>
+
+    <!-- OpenAI Settings -->
+    <div class="col-12">
+      <div class="card card-m p-3" style="border-top:3px solid #10a37f">
+        <h6 class="fw-bold mb-3"><i class="bi bi-mic-fill me-2" style="color:#10a37f"></i>Call Transcription (OpenAI Whisper)</h6>
+        <div class="row g-2 align-items-end">
+          <div class="col-md-8">
+            <label class="form-label fw-semibold small">OpenAI API Key <span class="text-muted fw-normal">(from platform.openai.com → API Keys)</span></label>
+            <input type="password" id="s-openai-api-key" class="form-control form-control-sm" placeholder="sk-..."/>
+            <div class="text-muted" style="font-size:.72rem">Used for call recording transcription (Whisper). ~$0.006/min. Stored securely in your Google Sheet.</div>
+          </div>
+          <div class="col-md-4 pt-3">
+            <button class="btn btn-sm btn-outline-secondary w-100" onclick="saveOpenAIKey()"><i class="bi bi-save me-1"></i>Save OpenAI Key</button>
+            <div id="openai-key-result" class="small mt-1"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1221,6 +1266,157 @@ document.addEventListener("DOMContentLoaded", function() {
     showLoginScreen();
   }
 });
+
+// ─────────────────────────────────────────────────────────────
+// CALL RECORDING ANALYSIS
+// ─────────────────────────────────────────────────────────────
+function toggleCallPanel() {
+  var body = document.getElementById("callAnalysisBody");
+  var chev = document.getElementById("callPanelChevron");
+  if (!body) return;
+  var open = body.style.display !== "none";
+  body.style.display = open ? "none" : "";
+  if (chev) chev.style.transform = open ? "" : "rotate(180deg)";
+}
+
+function onCallFileSelected() {
+  var btn = document.getElementById("transcribeBtn");
+  var fileInput = document.getElementById("callRecordingFile");
+  if (btn) btn.disabled = !(fileInput && fileInput.files && fileInput.files.length > 0);
+}
+
+async function transcribeCall() {
+  var fileInput = document.getElementById("callRecordingFile");
+  var file = fileInput && fileInput.files && fileInput.files[0];
+  if (!file) return;
+
+  var btn = document.getElementById("transcribeBtn");
+  var resultDiv = document.getElementById("callAnalysisResult");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Transcribing...';
+  resultDiv.style.display = "";
+  resultDiv.innerHTML = '<div class="text-muted small py-2"><span class="spinner-border spinner-border-sm me-1"></span>Sending to Whisper API — this may take 20–60 seconds for long calls...</div>';
+
+  try {
+    // 1. Get OpenAI key from backend
+    var keyResult = await api("getOpenAIKey");
+    var openaiKey = keyResult.key;
+
+    // 2. Call Whisper from browser (avoids Apps Script payload size limits)
+    var formData = new FormData();
+    formData.append("file", file, file.name);
+    formData.append("model", "whisper-1");
+    formData.append("response_format", "verbose_json");
+
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Transcribing... (Whisper)';
+
+    var whisperResp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + openaiKey },
+      body: formData
+    });
+
+    if (!whisperResp.ok) {
+      var errData = await whisperResp.json().catch(function(){ return {}; });
+      throw new Error("Whisper: " + (errData.error && errData.error.message ? errData.error.message : whisperResp.status));
+    }
+
+    var whisperData = await whisperResp.json();
+    var transcript = whisperData.text || "";
+
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Analyzing with Claude...';
+
+    // 3. Get agent name from QA form (if already selected)
+    var agentInput = document.getElementById("qa-agent-input");
+    var agentName = (agentInput && agentInput.value) ? agentInput.value : "Agent";
+
+    // 4. Send transcript to Claude for analysis
+    var analysis = await api("analyzeCallTranscript", { transcript: transcript, agent_name: agentName });
+
+    // 5. Render results
+    resultDiv.innerHTML = renderCallAnalysis(transcript, analysis);
+
+    // 6. Auto-fill Ticket ID if empty and order number found
+    var ticketInput = document.getElementById("qa-ticket");
+    if (ticketInput && !ticketInput.value && analysis.order_numbers && analysis.order_numbers.length && analysis.order_numbers[0] !== "N/A") {
+      ticketInput.value = analysis.order_numbers[0];
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Re-analyze';
+
+  } catch (err) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-soundwave me-1"></i>Transcribe &amp; Analyze';
+    resultDiv.innerHTML = '<div class="alert alert-danger py-2 small mb-0"><i class="bi bi-exclamation-triangle me-1"></i>' + (err.message || err) + '</div>';
+  }
+}
+
+function renderCallAnalysis(transcript, r) {
+  var toneColor = { "Professional":"success","Empathetic":"primary","Neutral":"secondary","Impatient":"warning","Unprofessional":"danger" };
+  var custColor  = { "Calm":"success","Satisfied":"success","Confused":"warning","Frustrated":"warning","Angry":"danger" };
+  var perfColor  = { "Excellent":"success","Good":"primary","Needs Improvement":"warning","Poor":"danger" };
+
+  var agentToneBadge = '<span class="badge bg-' + (toneColor[r.agent_tone]||"secondary") + '">' + (r.agent_tone||"—") + '</span>';
+  var custToneBadge  = '<span class="badge bg-' + (custColor[r.customer_tone]||"secondary") + '">' + (r.customer_tone||"—") + '</span>';
+  var perfBadge      = '<span class="badge bg-' + (perfColor[r.agent_performance]||"secondary") + '">' + (r.agent_performance||"—") + '</span>';
+
+  var ordersHtml = (r.order_numbers||[]).map(function(o){ return o==="N/A" ? '<span class="badge bg-light text-muted border">N/A</span>' : '<span class="badge" style="background:#e8f4fd;color:#1565c0;font-family:monospace">' + o + '</span>'; }).join(" ");
+
+  var kwHtml = (r.keywords||[]).map(function(k){
+    var cats = { refund:"#ffe3e3,#c0392b", postponed:"#fff3cd,#9c6f00", cancelled:"#f8d7da,#721c24", event:"#d4edda,#155724", complaint:"#f8d7da,#721c24", escalation:"#f8d7da,#721c24", verification:"#cce5ff,#004085", payment:"#fff3cd,#9c6f00", other:"#e2d9f3,#4A00BB", booking:"#d4edda,#155724", account:"#e2d9f3,#4A00BB", wrong_info:"#ffe3e3,#c0392b" };
+    var colors = (cats[k.category]||"#e2d9f3,#4A00BB").split(",");
+    return '<span class="badge me-1 mb-1" style="background:'+colors[0]+';color:'+colors[1]+';font-size:.75rem">'+k.text+'</span>';
+  }).join("");
+
+  var issuesHtml = (r.issue_types||[]).length === 0
+    ? '<div class="text-success small"><i class="bi bi-check-circle me-1"></i>No issues detected</div>'
+    : (r.issue_types||[]).map(function(it){ return '<div class="issue-flag"><div><div class="issue-name">❌ '+it.name+'</div><div class="issue-reason">'+it.reason+'</div></div></div>'; }).join("");
+
+  var transcriptEscaped = transcript.replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+  return '<div class="border rounded p-2 mt-1" style="background:var(--bs-body-bg)">' +
+
+    // Scores row
+    '<div class="d-flex flex-wrap gap-3 mb-2 align-items-center">' +
+      '<div><span class="text-muted" style="font-size:.72rem">AGENT TONE</span><br>' + agentToneBadge + '</div>' +
+      '<div><span class="text-muted" style="font-size:.72rem">CUSTOMER TONE</span><br>' + custToneBadge + '</div>' +
+      '<div><span class="text-muted" style="font-size:.72rem">PERFORMANCE</span><br>' + perfBadge + '</div>' +
+      '<div class="ms-auto"><span class="text-muted" style="font-size:.72rem">ORDER NUMBERS</span><br>' + (ordersHtml||'<span class="badge bg-light text-muted border">N/A</span>') + '</div>' +
+    '</div>' +
+
+    // Summary
+    (r.summary ? '<div class="mb-2 p-2 rounded" style="background:#f8f9fa;font-size:.8rem"><i class="bi bi-chat-quote me-1 text-muted"></i>' + r.summary + '</div>' : '') +
+
+    // Performance notes
+    (r.performance_notes ? '<div class="mb-2 p-2 rounded" style="background:#f0fff8;border:1px solid #c3e6cb;font-size:.78rem"><i class="bi bi-clipboard-check me-1 text-success"></i><strong>Agent Notes:</strong> ' + r.performance_notes + '</div>' : '') +
+
+    // Keywords
+    (kwHtml ? '<div class="mb-2"><span class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.05em">Key Topics</span><br>' + kwHtml + '</div>' : '') +
+
+    // Issues
+    '<div class="mb-2"><span class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.05em">Issue Types</span><div class="mt-1">' + issuesHtml + '</div></div>' +
+
+    // Transcript (collapsible)
+    '<details class="mt-1"><summary class="text-muted" style="font-size:.75rem;cursor:pointer">Show full transcript</summary>' +
+    '<div class="mt-1 p-2 rounded border" style="font-size:.75rem;white-space:pre-wrap;max-height:200px;overflow-y:auto;background:#f8f9fa">' + transcriptEscaped + '</div></details>' +
+
+  '</div>';
+}
+
+// ── OpenAI Key ────────────────────────────────────────────────
+function saveOpenAIKey() {
+  var key = (document.getElementById("s-openai-api-key")||{}).value || "";
+  var resEl = document.getElementById("openai-key-result");
+  if (resEl) resEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+  api("saveSettings", { openai_api_key: key })
+    .then(function(){
+      if (resEl) resEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>Saved</span>';
+    })
+    .catch(function(e){
+      if (resEl) resEl.innerHTML = '<span class="text-danger">Error: ' + e + '</span>';
+    });
+}
 
 // ─────────────────────────────────────────────────────────────
 // USER MANAGEMENT (Settings tab)
@@ -2695,6 +2891,8 @@ function loadSettings() {
     // Load Claude API key
     var ck = document.getElementById("s-claude-api-key");
     if(ck) ck.value = s.claude_api_key || "";
+    var ok = document.getElementById("s-openai-api-key");
+    if(ok) ok.value = s.openai_api_key || "";
     if(mid) mid.value = s.intercom_manager_id || "";
   }).catch(function(){});
 }
