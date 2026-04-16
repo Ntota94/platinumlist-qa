@@ -2817,6 +2817,11 @@ function renderAIPanel(r) {
   var html = '<div class="ai-panel">';
   html += '<div class="ai-panel-hdr"><i class="bi bi-stars" style="color:#4DD9FF;font-size:1rem"></i><span class="ai-ttl">AI Quality Analysis</span><span class="badge ms-auto" style="background:#e8e0ff;color:#4A00BB;font-size:.68rem">Claude AI</span></div>';
 
+  // Parse error warning
+  if (r._parse_error) {
+    html += '<div class="ai-section"><div class="alert alert-warning mb-0 py-2 small"><i class="bi bi-exclamation-triangle me-1"></i>AI returned a partial result — the conversation may contain unusual characters. <br><small class="text-muted">' + r._parse_error + '</small></div></div>';
+  }
+
   // Order numbers
   var orders = r.order_numbers || [];
   html += '<div class="ai-section"><div class="ai-section-title"><i class="bi bi-hash"></i> Order / Reference Numbers</div>';
