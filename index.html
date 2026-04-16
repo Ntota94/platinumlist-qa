@@ -2267,14 +2267,66 @@ function renderQueue(){
 
   // Show already-validated ones below
   if(_allVals.length>0){
-    html+='<hr/><h6 class="fw-bold mb-3 text-success"><i class="bi bi-check-circle me-1"></i>Already Validated ('+_allVals.length+')</h6>';
-    html+='<div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr>'+
+    // Build unique filter options from data
+    var agents      = [...new Set(_allVals.map(function(v){return v.agent_name||'';}).filter(Boolean))].sort();
+    var responsibles= [...new Set(_allVals.map(function(v){return v.responsible||'';}).filter(Boolean))].sort();
+    var issueTypes  = [...new Set(_allVals.map(function(v){return v.agent_issue_type||'';}).filter(function(x){return x&&x!=='--';}) )].sort();
+
+    html+='<hr/>';
+    html+='<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">';
+    html+='<h6 class="fw-bold text-success mb-0"><i class="bi bi-check-circle me-1"></i>Already Validated (<span id="val-count-shown">'+_allVals.length+'</span> of '+_allVals.length+')</h6>';
+    html+='<button class="btn btn-sm btn-outline-secondary" onclick="clearValFilters()"><i class="bi bi-x-circle me-1"></i>Clear Filters</button>';
+    html+='</div>';
+
+    // Filter bar
+    html+='<div class="card card-m p-2 mb-3">';
+    html+='<div class="row g-2 align-items-end">';
+    html+='<div class="col-md-2"><label class="form-label small fw-semibold mb-1">Agent</label>'+
+      '<select class="form-select form-select-sm" id="vf-agent" onchange="applyValFilters()">'+
+      '<option value="">All agents</option>'+agents.map(function(a){return'<option value="'+a+'">'+a+'</option>';}).join('')+
+      '</select></div>';
+    html+='<div class="col-md-2"><label class="form-label small fw-semibold mb-1">Responsible</label>'+
+      '<select class="form-select form-select-sm" id="vf-responsible" onchange="applyValFilters()">'+
+      '<option value="">All</option>'+responsibles.map(function(r){return'<option value="'+r+'">'+r+'</option>';}).join('')+
+      '</select></div>';
+    html+='<div class="col-md-2"><label class="form-label small fw-semibold mb-1">Status</label>'+
+      '<select class="form-select form-select-sm" id="vf-status" onchange="applyValFilters()">'+
+      '<option value="">All</option><option value="valid">Valid (agent fault)</option><option value="invalid">Invalid (not agent)</option>'+
+      '</select></div>';
+    html+='<div class="col-md-3"><label class="form-label small fw-semibold mb-1">Issue Type</label>'+
+      '<select class="form-select form-select-sm" id="vf-issue" onchange="applyValFilters()">'+
+      '<option value="">All issue types</option>'+issueTypes.map(function(t){return'<option value="'+t+'">'+t+'</option>';}).join('')+
+      '</select></div>';
+    html+='<div class="col-md-2"><label class="form-label small fw-semibold mb-1">Sort By</label>'+
+      '<select class="form-select form-select-sm" id="vf-sort" onchange="applyValFilters()">'+
+      '<option value="">Default</option>'+
+      '<option value="agent_asc">Agent A→Z</option>'+
+      '<option value="agent_desc">Agent Z→A</option>'+
+      '<option value="date_asc">Date ↑ Oldest</option>'+
+      '<option value="date_desc">Date ↓ Newest</option>'+
+      '<option value="rating_asc">Rating ↑</option>'+
+      '<option value="rating_desc">Rating ↓</option>'+
+      '</select></div>';
+    html+='<div class="col-md-1"><label class="form-label small fw-semibold mb-1">Rating</label>'+
+      '<select class="form-select form-select-sm" id="vf-rating" onchange="applyValFilters()">'+
+      '<option value="">All</option><option value="1">★1</option><option value="2">★2</option><option value="3">★3</option>'+
+      '</select></div>';
+    html+='</div></div>';
+
+    html+='<div class="table-responsive" id="val-table-wrap"><table class="table table-sm table-bordered table-hover" id="val-table"><thead class="table-light"><tr>'+
       '<th>Agent</th><th>Chat ID</th><th>Rating</th><th>Date</th>'+
       '<th>Responsible</th><th>Status</th><th>Issue Type</th><th>Done By</th><th style="width:70px">Actions</th>'+
-      '</tr></thead><tbody>';
+      '</tr></thead><tbody id="val-tbody">';
     _allVals.forEach(function(v,idx){
       var statusCls=v.validation_status==="valid"?"danger":"success";
-      html+='<tr>'+
+      html+='<tr class="val-row"'+
+        ' data-agent="'+(v.agent_name||'').toLowerCase()+'"'+
+        ' data-responsible="'+(v.responsible||'').toLowerCase()+'"'+
+        ' data-status="'+(v.validation_status||'').toLowerCase()+'"'+
+        ' data-issue="'+(v.agent_issue_type||'').toLowerCase()+'"'+
+        ' data-rating="'+(v.rating||'')+'"'+
+        ' data-date="'+(v.date||'')+'"'+
+        '>'+
         '<td class="fw-semibold">'+v.agent_name+'</td>'+
         '<td class="small text-muted">'+v.chat_id+'</td>'+
         '<td><span class="badge bg-danger">'+v.rating+'</span></td>'+
@@ -3430,6 +3482,59 @@ var TX_TYPES = ["Refund Request","Refund Follow Up","Event Cancelation","Event P
 
 function buildTxTypeDropdown() {
   // no-op: tx type dropdown removed from QA Entry; used as plain <select> in validation cards
+}
+
+// --- VALIDATED TABLE FILTERS ---
+function applyValFilters(){
+  var fAgent       = (document.getElementById("vf-agent")      ||{}).value||"";
+  var fResponsible = (document.getElementById("vf-responsible") ||{}).value||"";
+  var fStatus      = (document.getElementById("vf-status")      ||{}).value||"";
+  var fIssue       = (document.getElementById("vf-issue")       ||{}).value||"";
+  var fRating      = (document.getElementById("vf-rating")      ||{}).value||"";
+  var fSort        = (document.getElementById("vf-sort")        ||{}).value||"";
+
+  var tbody = document.getElementById("val-tbody");
+  if(!tbody) return;
+
+  // Get all rows and filter
+  var rows = Array.from(tbody.querySelectorAll("tr.val-row"));
+  var shown = 0;
+  rows.forEach(function(row){
+    var match =
+      (!fAgent       || row.dataset.agent       === fAgent.toLowerCase()) &&
+      (!fResponsible || row.dataset.responsible === fResponsible.toLowerCase()) &&
+      (!fStatus      || row.dataset.status      === fStatus.toLowerCase()) &&
+      (!fIssue       || row.dataset.issue       === fIssue.toLowerCase()) &&
+      (!fRating      || row.dataset.rating      === fRating);
+    row.style.display = match ? "" : "none";
+    if(match) shown++;
+  });
+
+  // Sort visible rows
+  if(fSort){
+    var visibleRows = rows.filter(function(r){ return r.style.display !== "none"; });
+    visibleRows.sort(function(a,b){
+      if(fSort==="agent_asc")   return a.dataset.agent.localeCompare(b.dataset.agent);
+      if(fSort==="agent_desc")  return b.dataset.agent.localeCompare(a.dataset.agent);
+      if(fSort==="date_asc")    return (a.dataset.date||"").localeCompare(b.dataset.date||"");
+      if(fSort==="date_desc")   return (b.dataset.date||"").localeCompare(a.dataset.date||"");
+      if(fSort==="rating_asc")  return Number(a.dataset.rating)-Number(b.dataset.rating);
+      if(fSort==="rating_desc") return Number(b.dataset.rating)-Number(a.dataset.rating);
+      return 0;
+    });
+    visibleRows.forEach(function(r){ tbody.appendChild(r); });
+  }
+
+  var countEl = document.getElementById("val-count-shown");
+  if(countEl) countEl.textContent = shown;
+}
+
+function clearValFilters(){
+  ["vf-agent","vf-responsible","vf-status","vf-issue","vf-rating","vf-sort"].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.value = "";
+  });
+  applyValFilters();
 }
 
 // --- REMOVE VALIDATED CASE (returns to pending) ---
