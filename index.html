@@ -2057,7 +2057,7 @@ function buildValCard(imp, idx, issueOpts, startOpen){
         // Responsible
         '<div class="col-md-3">'+
           '<label class="form-label fw-semibold small">Responsible <span class="text-danger">*</span></label>'+
-          '<select class="form-select form-select-sm" id="vresp-'+idx+'" onchange="toggleIssueField('+idx+');startAutoSaveTimer('+idx+')">'+
+          '<select class="form-select form-select-sm" id="vresp-'+idx+'" onchange="toggleIssueField('+idx+')">'+
             '<option value="">-- Select --</option>'+
             '<option value="Agent">Agent — valid (agent fault)</option>'+
             '<option value="Customer">Customer — invalid</option>'+
@@ -2110,11 +2110,6 @@ function buildValCard(imp, idx, issueOpts, startOpen){
       '</div>'+
       '<div class="d-flex gap-2 pt-2 border-top align-items-center flex-wrap">'+
         '<button class="btn btn-success btn-sm" onclick="saveVal('+idx+',true)"><i class="bi bi-check-lg me-1"></i>Save & Next</button>'+
-        '<div id="autosave-badge-'+idx+'" style="display:none" class="d-flex align-items-center gap-2 ms-2">'+
-          '<div class="spinner-border spinner-border-sm text-warning" style="width:14px;height:14px;border-width:2px"></div>'+
-          '<span class="small text-warning fw-semibold">Auto-saving in <span id="autosave-count-'+idx+'">60</span>s</span>'+
-          '<button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.72rem" onclick="cancelAutoSave('+idx+')">Cancel</button>'+
-        '</div>'+
         '<div id="vsave-result-'+idx+'" class="ms-2 align-self-center small text-muted"></div>'+
       '</div>'+
     '</div>'+
@@ -2140,52 +2135,7 @@ function toggleIssueField(idx){
   if(card){ card.style.borderColor = resp ? "#0ca678" : ""; card.style.borderWidth = resp ? "2px" : ""; card.style.borderStyle = resp ? "solid" : ""; }
 }
 
-// ── Auto-save timer (60s countdown after Responsible is selected) ──
-var _autoSaveTimers = {}; // idx → {interval, remaining}
-
-var _pageReadyTime = Date.now();
-function startAutoSaveTimer(idx){
-  // Ignore auto-fire events within first 3 seconds of page load (browser state restore)
-  if(Date.now() - _pageReadyTime < 3000) return;
-  var resp = (document.getElementById("vresp-"+idx)||{}).value||"";
-  if(!resp){ cancelAutoSave(idx); return; } // cleared → cancel
-
-  // Cancel any existing timer for this card
-  cancelAutoSave(idx);
-
-  var badge   = document.getElementById("autosave-badge-"+idx);
-  var counter = document.getElementById("autosave-count-"+idx);
-  var remaining = 60;
-  if(counter) counter.textContent = remaining;
-  if(badge)   badge.style.display = "flex";
-
-  var interval = setInterval(function(){
-    remaining--;
-    if(counter) counter.textContent = remaining;
-    if(remaining <= 0){
-      clearInterval(interval);
-      delete _autoSaveTimers[idx];
-      if(badge) badge.style.display = "none";
-      // Only auto-save if Responsible is still selected
-      var r = (document.getElementById("vresp-"+idx)||{}).value||"";
-      if(r) saveVal(idx, false);
-    }
-  }, 1000);
-
-  _autoSaveTimers[idx] = interval;
-}
-
-function cancelAutoSave(idx){
-  if(_autoSaveTimers[idx]){
-    clearInterval(_autoSaveTimers[idx]);
-    delete _autoSaveTimers[idx];
-  }
-  var badge = document.getElementById("autosave-badge-"+idx);
-  if(badge) badge.style.display = "none";
-}
-
 function saveVal(idx,goNext){
-  cancelAutoSave(idx); // clear timer if manually saved
   var imp=_pendingQ[idx]; if(!imp) return;
   var resp=(document.getElementById("vresp-"+idx)||{}).value||"";
   if(!resp){ alert("Please select who is Responsible."); return; }
