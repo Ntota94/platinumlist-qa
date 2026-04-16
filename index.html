@@ -1317,57 +1317,75 @@ async function transcribeCall() {
     resultDiv.innerHTML = '<div class="text-muted small py-2"><span class="spinner-border spinner-border-sm me-1"></span>' + msg + '</div>';
   }
 
+  // Convert Uint8Array slice to base64 safely (avoids stack overflow on large arrays)
+  function uint8ToBase64(uint8arr) {
+    var str = "";
+    var step = 8192;
+    for (var i = 0; i < uint8arr.length; i += step) {
+      str += String.fromCharCode.apply(null, uint8arr.subarray(i, i + step));
+    }
+    return btoa(str);
+  }
+
   try {
-    // STEP 1: Get a Google Drive resumable upload URL from Apps Script
-    setStatus("Preparing upload...");
-    var session = await api("createDriveUploadSession", {
-      mime_type: file.type || "audio/mpeg",
-      file_name: file.name
+    // STEP 1: Read file as ArrayBuffer
+    setStatus("Reading audio file...");
+    var arrayBuffer = await new Promise(function(resolve, reject) {
+      var reader = new FileReader();
+      reader.onload  = function(e) { resolve(e.target.result); };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
     });
 
-    // STEP 2: Upload audio file directly to Google Drive via the resumable URL
-    // This goes to googleapis.com — never blocked and no size limit issues
-    setStatus("Uploading to Drive (" + (file.size / 1024 / 1024).toFixed(1) + " MB)...");
-    var uploadResp = await fetch(session.upload_url, {
-      method:  "PUT",
-      headers: { "Content-Type": file.type || "audio/mpeg" },
-      body:    file
-    });
-    if (!uploadResp.ok) {
-      var upErr = await uploadResp.text().catch(function(){ return ""; });
-      throw new Error("Drive upload failed (" + uploadResp.status + "): " + upErr.slice(0, 200));
+    var bytes       = new Uint8Array(arrayBuffer);
+    var CHUNK_BYTES = 500 * 1024; // 500 KB binary per chunk → ~667 KB base64 — safe for Apps Script
+    var totalChunks = Math.ceil(bytes.length / CHUNK_BYTES);
+    var uploadId    = "qa" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+    // STEP 2: Upload chunks to Apps Script (each chunk stored in Drive)
+    for (var i = 0; i < totalChunks; i++) {
+      setStatus("Uploading part " + (i + 1) + " of " + totalChunks + "...");
+      var start     = i * CHUNK_BYTES;
+      var end       = Math.min(start + CHUNK_BYTES, bytes.length);
+      var chunkB64  = uint8ToBase64(bytes.slice(start, end));
+      await api("uploadAudioChunk", {
+        upload_id:    uploadId,
+        chunk_index:  i,
+        total_chunks: totalChunks,
+        chunk_data:   chunkB64,
+        file_name:    file.name,
+        mime_type:    file.type || "audio/mpeg"
+      });
     }
 
-    // STEP 3: Apps Script reads the file from Drive and sends to Whisper
+    // STEP 3: Apps Script reassembles chunks + sends to Whisper
     setStatus("Transcribing with Whisper AI...");
-    var transcribeResult = await api("transcribeFromDrive", {
-      file_id:   session.file_id,
-      mime_type: file.type || "audio/mpeg",
-      file_name: file.name
+    var transcribeResult = await api("finalizeAudioTranscription", {
+      upload_id:    uploadId,
+      total_chunks: totalChunks,
+      mime_type:    file.type || "audio/mpeg",
+      file_name:    file.name
     });
     var transcript = transcribeResult.transcript || "";
     if (!transcript) throw new Error("Whisper returned an empty transcript. The recording may be silent or too short.");
 
-    // STEP 4: Send transcript to Claude for QA analysis
+    // STEP 4: Claude QA analysis
     setStatus("Analyzing with Claude AI...");
     var agentInput = document.getElementById("qa-agent-input");
     var agentName  = (agentInput && agentInput.value) ? agentInput.value : "Agent";
     var analysis   = await api("analyzeCallTranscript", { transcript: transcript, agent_name: agentName });
 
-    // STEP 5: Render results
+    // STEP 5: Render
     resultDiv.innerHTML = renderCallAnalysis(transcript, analysis);
-
-    // Auto-fill Ticket ID if empty and an order number was found
     var ticketInput = document.getElementById("qa-ticket");
     if (ticketInput && !ticketInput.value && analysis.order_numbers && analysis.order_numbers.length && analysis.order_numbers[0] !== "N/A") {
       ticketInput.value = analysis.order_numbers[0];
     }
-
-    btn.disabled = false;
+    btn.disabled  = false;
     btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Re-analyze';
 
   } catch (err) {
-    btn.disabled = false;
+    btn.disabled  = false;
     btn.innerHTML = '<i class="bi bi-soundwave me-1"></i>Transcribe &amp; Analyze';
     resultDiv.innerHTML = '<div class="alert alert-danger py-2 small mb-0"><i class="bi bi-exclamation-triangle me-1"></i>' + (err.message || String(err)) + '</div>';
   }
