@@ -1310,38 +1310,37 @@ async function transcribeCall() {
   var btn = document.getElementById("transcribeBtn");
   var resultDiv = document.getElementById("callAnalysisResult");
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Transcribing...';
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Reading file...';
   resultDiv.style.display = "";
-  resultDiv.innerHTML = '<div class="text-muted small py-2"><span class="spinner-border spinner-border-sm me-1"></span>Sending to Whisper API — this may take 20–60 seconds for long calls...</div>';
+  resultDiv.innerHTML = '<div class="text-muted small py-2"><span class="spinner-border spinner-border-sm me-1"></span>Reading audio file...</div>';
 
   try {
-    // 1. Get OpenAI key from backend
-    var keyResult = await api("getOpenAIKey");
-    var openaiKey = keyResult.key;
-
-    // 2. Call Whisper from browser (avoids Apps Script payload size limits)
-    var formData = new FormData();
-    formData.append("file", file, file.name);
-    formData.append("model", "whisper-1");
-    formData.append("response_format", "verbose_json");
-
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Transcribing... (Whisper)';
-
-    var whisperResp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-      method: "POST",
-      headers: { "Authorization": "Bearer " + openaiKey },
-      body: formData
+    // 1. Read file as base64 in browser
+    var base64 = await new Promise(function(resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        // result is "data:audio/mpeg;base64,XXXX" — strip the prefix
+        var b64 = e.target.result.split(",")[1];
+        resolve(b64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
     });
 
-    if (!whisperResp.ok) {
-      var errData = await whisperResp.json().catch(function(){ return {}; });
-      throw new Error("Whisper: " + (errData.error && errData.error.message ? errData.error.message : whisperResp.status));
-    }
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Transcribing via Whisper...';
+    resultDiv.innerHTML = '<div class="text-muted small py-2"><span class="spinner-border spinner-border-sm me-1"></span>Transcribing — this may take 30–90 seconds depending on call length...</div>';
 
-    var whisperData = await whisperResp.json();
-    var transcript = whisperData.text || "";
+    // 2. Send base64 to Apps Script → Apps Script calls Whisper (bypasses office firewall)
+    var transcribeResult = await api("transcribeAudio", {
+      audio_base64: base64,
+      mime_type:    file.type || "audio/mpeg",
+      file_name:    file.name
+    });
+    var transcript = transcribeResult.transcript || "";
+    if (!transcript) throw new Error("Whisper returned an empty transcript.");
 
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Analyzing with Claude...';
+    resultDiv.innerHTML = '<div class="text-muted small py-2"><span class="spinner-border spinner-border-sm me-1"></span>Analyzing transcript with Claude AI...</div>';
 
     // 3. Get agent name from QA form (if already selected)
     var agentInput = document.getElementById("qa-agent-input");
