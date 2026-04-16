@@ -3100,13 +3100,13 @@ function saveAllPending(){
   var savBtn=document.getElementById("save-all-btn");
   if(savBtn){ savBtn.disabled=true; savBtn.innerHTML='<i class="bi bi-hourglass-split me-1"></i>Saving '+toSave.length+'...'; }
 
-  Promise.all(toSave.map(function(item){ return api("validateDSAT",item.payload); }))
-  .then(function(){
+  // Use allSettled so a single failure (e.g. Intercom note error) doesn't block the rest
+  Promise.allSettled(toSave.map(function(item){ return api("validateDSAT",item.payload); }))
+  .then(function(results){
     if(savBtn){ savBtn.disabled=false; savBtn.innerHTML='<i class="bi bi-save2 me-1"></i>Save All Filled'; }
+    var failed = results.filter(function(r){ return r.status==="rejected"; });
+    if(failed.length) console.warn("Some saves had errors:", failed.map(function(r){ return r.reason; }));
     loadQueue();
-  }).catch(function(err){
-    if(savBtn){ savBtn.disabled=false; savBtn.innerHTML='<i class="bi bi-save2 me-1"></i>Save All Filled'; }
-    alert("Some saves failed: "+err.message);
   });
 }
 
