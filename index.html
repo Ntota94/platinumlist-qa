@@ -1307,52 +1307,57 @@ async function transcribeCall() {
   var file = fileInput && fileInput.files && fileInput.files[0];
   if (!file) return;
 
-  var btn = document.getElementById("transcribeBtn");
+  var btn       = document.getElementById("transcribeBtn");
   var resultDiv = document.getElementById("callAnalysisResult");
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Reading file...';
+  btn.disabled  = true;
   resultDiv.style.display = "";
-  resultDiv.innerHTML = '<div class="text-muted small py-2"><span class="spinner-border spinner-border-sm me-1"></span>Reading audio file...</div>';
+
+  function setStatus(msg) {
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + msg;
+    resultDiv.innerHTML = '<div class="text-muted small py-2"><span class="spinner-border spinner-border-sm me-1"></span>' + msg + '</div>';
+  }
 
   try {
-    // 1. Read file as base64 in browser
-    var base64 = await new Promise(function(resolve, reject) {
-      var reader = new FileReader();
-      reader.onload = function(e) {
-        // result is "data:audio/mpeg;base64,XXXX" — strip the prefix
-        var b64 = e.target.result.split(",")[1];
-        resolve(b64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+    // STEP 1: Get a Google Drive resumable upload URL from Apps Script
+    setStatus("Preparing upload...");
+    var session = await api("createDriveUploadSession", {
+      mime_type: file.type || "audio/mpeg",
+      file_name: file.name
     });
 
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Transcribing via Whisper...';
-    resultDiv.innerHTML = '<div class="text-muted small py-2"><span class="spinner-border spinner-border-sm me-1"></span>Transcribing — this may take 30–90 seconds depending on call length...</div>';
+    // STEP 2: Upload audio file directly to Google Drive via the resumable URL
+    // This goes to googleapis.com — never blocked and no size limit issues
+    setStatus("Uploading to Drive (" + (file.size / 1024 / 1024).toFixed(1) + " MB)...");
+    var uploadResp = await fetch(session.upload_url, {
+      method:  "PUT",
+      headers: { "Content-Type": file.type || "audio/mpeg" },
+      body:    file
+    });
+    if (!uploadResp.ok) {
+      var upErr = await uploadResp.text().catch(function(){ return ""; });
+      throw new Error("Drive upload failed (" + uploadResp.status + "): " + upErr.slice(0, 200));
+    }
 
-    // 2. Send base64 to Apps Script → Apps Script calls Whisper (bypasses office firewall)
-    var transcribeResult = await api("transcribeAudio", {
-      audio_base64: base64,
-      mime_type:    file.type || "audio/mpeg",
-      file_name:    file.name
+    // STEP 3: Apps Script reads the file from Drive and sends to Whisper
+    setStatus("Transcribing with Whisper AI...");
+    var transcribeResult = await api("transcribeFromDrive", {
+      file_id:   session.file_id,
+      mime_type: file.type || "audio/mpeg",
+      file_name: file.name
     });
     var transcript = transcribeResult.transcript || "";
-    if (!transcript) throw new Error("Whisper returned an empty transcript.");
+    if (!transcript) throw new Error("Whisper returned an empty transcript. The recording may be silent or too short.");
 
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Analyzing with Claude...';
-    resultDiv.innerHTML = '<div class="text-muted small py-2"><span class="spinner-border spinner-border-sm me-1"></span>Analyzing transcript with Claude AI...</div>';
-
-    // 3. Get agent name from QA form (if already selected)
+    // STEP 4: Send transcript to Claude for QA analysis
+    setStatus("Analyzing with Claude AI...");
     var agentInput = document.getElementById("qa-agent-input");
-    var agentName = (agentInput && agentInput.value) ? agentInput.value : "Agent";
+    var agentName  = (agentInput && agentInput.value) ? agentInput.value : "Agent";
+    var analysis   = await api("analyzeCallTranscript", { transcript: transcript, agent_name: agentName });
 
-    // 4. Send transcript to Claude for analysis
-    var analysis = await api("analyzeCallTranscript", { transcript: transcript, agent_name: agentName });
-
-    // 5. Render results
+    // STEP 5: Render results
     resultDiv.innerHTML = renderCallAnalysis(transcript, analysis);
 
-    // 6. Auto-fill Ticket ID if empty and order number found
+    // Auto-fill Ticket ID if empty and an order number was found
     var ticketInput = document.getElementById("qa-ticket");
     if (ticketInput && !ticketInput.value && analysis.order_numbers && analysis.order_numbers.length && analysis.order_numbers[0] !== "N/A") {
       ticketInput.value = analysis.order_numbers[0];
@@ -1364,7 +1369,7 @@ async function transcribeCall() {
   } catch (err) {
     btn.disabled = false;
     btn.innerHTML = '<i class="bi bi-soundwave me-1"></i>Transcribe &amp; Analyze';
-    resultDiv.innerHTML = '<div class="alert alert-danger py-2 small mb-0"><i class="bi bi-exclamation-triangle me-1"></i>' + (err.message || err) + '</div>';
+    resultDiv.innerHTML = '<div class="alert alert-danger py-2 small mb-0"><i class="bi bi-exclamation-triangle me-1"></i>' + (err.message || String(err)) + '</div>';
   }
 }
 
