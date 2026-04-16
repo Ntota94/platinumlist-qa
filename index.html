@@ -397,7 +397,8 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
         <div class="col-md-8">
           <label class="form-label fw-semibold small mb-1">Upload Call Recording</label>
           <input type="file" class="form-control form-control-sm" id="callRecordingFile" accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm" onchange="onCallFileSelected()"/>
-          <div class="text-muted" style="font-size:.72rem">MP3 · WAV · M4A · OGG · Max ~25 MB · Arabic &amp; English supported</div>
+          <div class="text-muted" style="font-size:.72rem">MP3 · WAV · M4A · OGG · Max 25 MB · <strong>WAV files are large — convert to MP3 first if possible</strong></div>
+          <div id="callFileSizeWarn"></div>
         </div>
         <div class="col-md-4">
           <button class="btn btn-sm w-100" id="transcribeBtn" onclick="transcribeCall()" disabled
@@ -1280,9 +1281,25 @@ function toggleCallPanel() {
 }
 
 function onCallFileSelected() {
-  var btn = document.getElementById("transcribeBtn");
+  var btn     = document.getElementById("transcribeBtn");
   var fileInput = document.getElementById("callRecordingFile");
-  if (btn) btn.disabled = !(fileInput && fileInput.files && fileInput.files.length > 0);
+  var warnEl  = document.getElementById("callFileSizeWarn");
+  var file    = fileInput && fileInput.files && fileInput.files[0];
+  if (!file) { if (btn) btn.disabled = true; return; }
+
+  var mb = file.size / 1024 / 1024;
+  if (warnEl) {
+    if (mb > 24) {
+      warnEl.innerHTML = '<div class="alert alert-danger py-2 mb-2 small"><i class="bi bi-exclamation-triangle me-1"></i><strong>File too large (' + mb.toFixed(1) + ' MB).</strong> Whisper limit is 25 MB. WAV files are uncompressed — please convert to MP3 first using <a href="https://cloudconvert.com/wav-to-mp3" target="_blank">cloudconvert.com</a>.</div>';
+      if (btn) btn.disabled = true;
+      return;
+    } else if (mb > 15) {
+      warnEl.innerHTML = '<div class="alert alert-warning py-2 mb-2 small"><i class="bi bi-clock me-1"></i>Large file (' + mb.toFixed(1) + ' MB) — transcription may take 1–3 minutes.</div>';
+    } else {
+      warnEl.innerHTML = '';
+    }
+  }
+  if (btn) btn.disabled = false;
 }
 
 async function transcribeCall() {
