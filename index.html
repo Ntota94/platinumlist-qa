@@ -2345,35 +2345,8 @@ function renderQueue(){
   }
 
   document.getElementById("queue-list").innerHTML += html;
-
-  // Lazy-load conversations: only fetch when the card scrolls into view.
-  // This prevents simultaneous API calls for all pending D-SATs (bandwidth quota).
-  var _loadedConvs = new Set();
-  if ('IntersectionObserver' in window) {
-    var observer = new IntersectionObserver(function(entries) {
-      entries.forEach(function(entry) {
-        if (!entry.isIntersecting) return;
-        var idx = parseInt(entry.target.dataset.convIdx, 10);
-        if (_loadedConvs.has(idx)) return;
-        _loadedConvs.add(idx);
-        observer.unobserve(entry.target);
-        loadIntercomConversation(idx, _pendingQ[idx] && _pendingQ[idx].chat_id);
-      });
-    }, { rootMargin: '200px' }); // start loading 200px before the card enters view
-
-    _pendingQ.forEach(function(imp, idx) {
-      var panel = document.getElementById("conv-panel-" + idx);
-      if (panel) {
-        panel.dataset.convIdx = idx;
-        observer.observe(panel);
-      }
-    });
-  } else {
-    // Fallback for old browsers: load only the first card immediately, rest on demand
-    if (_pendingQ.length > 0) {
-      loadIntercomConversation(0, _pendingQ[0].chat_id);
-    }
-  }
+  // Conversations are NOT auto-loaded — each card has a "Load Chat" button.
+  // This prevents Intercom bandwidth quota errors from firing all API calls at once.
 }
 
 function buildValCard(imp, idx, issueOpts, startOpen){
@@ -2475,7 +2448,11 @@ function buildValCard(imp, idx, issueOpts, startOpen){
     // RIGHT — Conversation panel + AI panel
     '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;padding:8px">'+
       '<div class="conv-panel" id="conv-panel-'+idx+'" style="flex:1">'+
-        '<div class="conv-loading text-muted small"><i class="bi bi-hourglass me-1"></i>Conversation loads as you scroll here...</div>'+
+        '<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:10px">'+
+          '<button class="btn btn-sm btn-outline-secondary" onclick="loadIntercomConversation('+idx+',\''+chatId+'\')">'+
+            '<i class="bi bi-chat-text me-1"></i>Load Chat</button>'+
+          '<span class="text-muted small">Click to fetch the Intercom conversation</span>'+
+        '</div>'+
       '</div>'+
       '<div id="ai-panel-'+idx+'" style="display:none"></div>'+
     '</div>'+
