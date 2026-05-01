@@ -1757,8 +1757,8 @@ function updateLive(){
   var fe=document.getElementById("live-final"), le=document.getElementById("live-label");
   fe.textContent=fin;
   if(ko){ fe.style.color="#000"; le.innerHTML='<span class="badge badge-ko fs-6">K.O — Auto Fail</span>'; }
-  else if(fin>=90){ fe.style.color="#1e8449"; le.innerHTML='<span class="badge badge-nailed fs-6">Nailed It!</span>'; }
-  else if(fin>=80){ fe.style.color="#b7950b"; le.innerHTML='<span class="badge badge-almost fs-6">Almost There!</span>'; }
+  else if(fin>=80){ fe.style.color="#1e8449"; le.innerHTML='<span class="badge badge-nailed fs-6">Nailed It!</span>'; }
+  else if(fin>=70){ fe.style.color="#b7950b"; le.innerHTML='<span class="badge badge-almost fs-6">Almost There!</span>'; }
   else { fe.style.color="#c0392b"; le.innerHTML='<span class="badge badge-notquite fs-6">Not Quite There!</span>'; }
 }
 
@@ -2546,7 +2546,7 @@ function loadAgentView(){
 }
 
 function renderAgentView(s){
-  var sCls=s.avg_score>=90?"success":s.avg_score>=80?"warning":"danger";
+  var sCls=s.avg_score>=80?"success":s.avg_score>=70?"warning":"danger";
   var html='<div class="row g-3 mb-4">';
   html+='<div class="col-md-3"><div class="card card-m p-3 text-center"><div class="text-muted small">Avg QA Score</div><div class="score-big text-'+sCls+'">'+s.avg_score+'</div></div></div>';
   html+='<div class="col-md-3"><div class="card card-m p-3 text-center"><div class="text-muted small">Transactions</div><div class="score-big text-info">'+s.transactions.length+'<small class="fs-5">/8</small></div></div></div>';
@@ -2560,7 +2560,7 @@ function renderAgentView(s){
     s.transactions.forEach(function(tx){
       var ko=String(tx.has_ko)==="true"||String(tx.has_ko)==="TRUE";
       var sc=Number(tx.final_score);
-      var cls=ko?"score-black":sc>=90?"score-green":sc>=80?"score-yellow":"score-red";
+      var cls=ko?"score-black":sc>=80?"score-green":sc>=70?"score-yellow":"score-red";
       html+='<div class="col-md-3"><div class="card card-m p-2">'+
         '<div class="d-flex justify-content-between mb-1"><span class="fw-bold">T'+tx.transaction_no+'</span><span class="score-pill '+cls+'">'+tx.final_score+(ko?' KO':'')+'</span></div>'+
         '<div class="text-muted small">'+tx.date+' · '+tx.channel+'</div>'+
@@ -2722,7 +2722,7 @@ function renderDashboard(d,csatData,allAgents){
   if(!allAgents) allAgents=[];
   var html='<div class="row g-3 mb-4">';
   html+='<div class="col-md-3"><div class="card card-m p-3 text-center"><div class="text-muted small">Team Avg Score</div><div class="score-big text-primary">'+d.team_avg+'</div></div></div>';
-  html+='<div class="col-md-3"><div class="card card-m p-3 text-center"><div class="text-muted small">Agents ≥ 90</div><div class="score-big text-success">'+d.agents_above_90+'<small class="fs-5 text-muted"> / '+d.agents.length+'</small></div></div></div>';
+  html+='<div class="col-md-3"><div class="card card-m p-3 text-center"><div class="text-muted small">Agents ≥ 80</div><div class="score-big text-success">'+d.agents_above_90+'<small class="fs-5 text-muted"> / '+d.agents.length+'</small></div></div></div>';
   html+='<div class="col-md-3"><div class="card card-m p-3 text-center"><div class="text-muted small">Valid D-SATs</div><div class="score-big text-danger">'+d.total_valid_dsat+'</div></div></div>';
   html+='<div class="col-md-3"><div class="card card-m p-3"><div class="text-muted small">Top Issue</div><div class="fw-bold mt-1 small">'+d.top_issue_type+'</div></div></div>';
   html+='</div>';
@@ -2731,13 +2731,13 @@ function renderDashboard(d,csatData,allAgents){
   html+='<thead class="table-light"><tr><th>Rank</th><th>Agent</th><th onclick="sortTbl(2)" style="cursor:pointer">QA Score ↕</th><th>Rating</th><th onclick="sortTbl(4)" style="cursor:pointer">Tx ↕</th><th onclick="sortTbl(5)" style="cursor:pointer">D-SAT Received ↕</th><th onclick="sortTbl(6)" style="cursor:pointer">Valid ↕</th><th onclick="sortTbl(7)" style="cursor:pointer">Invalid ↕</th></tr></thead><tbody>';
   d.agents.forEach(function(a){
     var sc=a.avg_score;
-    var pill=sc>=90?"score-green":sc>=80?"score-yellow":"score-red";
+    var pill=sc>=80?"score-green":sc>=70?"score-yellow":"score-red";
     var rkCls=a.rank===1?"rank-1":a.rank===2?"rank-2":a.rank===3?"rank-3":"";
     html+='<tr>'+
       '<td class="'+rkCls+' fw-bold">'+a.rank+(a.rank<=3?' <i class="bi bi-trophy-fill"></i>':'')+'</td>'+
       '<td class="fw-semibold">'+a.agent_name+'</td>'+
       '<td><span class="score-pill '+pill+'">'+sc+'</span></td>'+
-      '<td><span class="badge '+(sc>=90?"bg-success":sc>=80?"bg-warning text-dark":"bg-danger")+'">'+a.rating_label+'</span></td>'+
+      '<td><span class="badge '+(sc>=80?"bg-success":sc>=70?"bg-warning text-dark":"bg-danger")+'">'+a.rating_label+'</span></td>'+
       '<td>'+a.tx_count+'/8</td>'+
       '<td>'+a.dsat_raw+'</td>'+
       '<td class="text-danger fw-semibold">'+a.dsat_valid+'</td>'+
@@ -2756,7 +2756,7 @@ function renderDashboard(d,csatData,allAgents){
 
   // --- Target Tracking & Manual C-SAT Input ---
   html+='<h6 class="fw-bold mb-2 mt-3"><i class="bi bi-bullseye me-2" style="color:var(--accent)"></i>Target Tracking &amp; C-SAT Input</h6>';
-  html+='<div class="small text-muted mb-2">Targets: <strong class="text-success">QA ≥ 90%</strong> &nbsp;|&nbsp; <strong class="text-success">C-SAT after validation ≥ 85%</strong>. Enter C-SAT % manually and click Save.</div>';
+  html+='<div class="small text-muted mb-2">Targets: <strong class="text-success">QA ≥ 80%</strong> &nbsp;|&nbsp; <strong class="text-success">C-SAT after validation ≥ 85%</strong>. Enter C-SAT % manually and click Save.</div>';
   html+='<div class="card card-m p-0 mb-3"><div class="table-responsive"><table class="table table-sm table-bordered mb-0" id="csat-tgt-tbl">';
   html+='<thead class="table-light"><tr><th>Agent</th><th>QA Score</th><th>QA Target</th><th>C-SAT Before Val (%)</th><th>C-SAT After Val (%)</th><th>C-SAT Target</th></tr></thead><tbody>';
   // Build QA lookup map from agents who have QA transactions this month
@@ -2778,10 +2778,10 @@ function renderDashboard(d,csatData,allAgents){
     var csatAfterVal=(saved.csat_after!==undefined&&saved.csat_after!=="") ? parseFloat(saved.csat_after) : null;
     var csatHit=csatAfterVal!==null ? (csatAfterVal>=85) : null;
     var qaScoreCell = qa
-      ? '<span class="score-pill '+(qa.avg_score>=90?"score-green":qa.avg_score>=80?"score-yellow":"score-red")+'">'+qa.avg_score+'</span>'
+      ? '<span class="score-pill '+(qa.avg_score>=80?"score-green":qa.avg_score>=70?"score-yellow":"score-red")+'">'+qa.avg_score+'</span>'
       : '<span class="text-muted small">—</span>';
     var qaTargetCell = qa
-      ? (qa.avg_score>=90?'<span class="badge bg-success">✓ Hit</span>':'<span class="badge bg-danger">✗ Missed</span>')
+      ? (qa.avg_score>=80?'<span class="badge bg-success">✓ Hit</span>':'<span class="badge bg-danger">✗ Missed</span>')
       : '<span class="text-muted small">C-SAT only</span>';
     html+='<tr data-agent="'+name.replace(/"/g,"&quot;")+'">'+
       '<td class="fw-semibold">'+name+(qa?'':'<span class="badge bg-secondary ms-1" style="font-size:.65rem">C-SAT</span>')+'</td>'+
@@ -2799,8 +2799,8 @@ function renderDashboard(d,csatData,allAgents){
   var savedTeamAfter = (savedTeamAvg.csat_after!==undefined&&savedTeamAvg.csat_after!=="") ? parseFloat(savedTeamAvg.csat_after) : null;
   html+='<tr class="table-light fw-bold" data-agent="Team Average" style="border-top:2px solid #dee2e6">'+
     '<td>Team Average</td>'+
-    '<td><span class="score-pill '+(totalQaAvg>=90?"score-green":totalQaAvg>=80?"score-yellow":"score-red")+'">'+totalQaAvg+'</span></td>'+
-    '<td class="text-center">'+(totalQaAvg>=90?'<span class="badge bg-success">✓ Hit</span>':'<span class="badge bg-danger">✗ Missed</span>')+'</td>'+
+    '<td><span class="score-pill '+(totalQaAvg>=80?"score-green":totalQaAvg>=70?"score-yellow":"score-red")+'">'+totalQaAvg+'</span></td>'+
+    '<td class="text-center">'+(totalQaAvg>=80?'<span class="badge bg-success">✓ Hit</span>':'<span class="badge bg-danger">✗ Missed</span>')+'</td>'+
     '<td><input type="number" class="form-control form-control-sm fw-bold" id="csat-before-Team-Average" value="'+(savedTeamAvg.csat_before||"")+'" min="0" max="100" step="0.1" style="width:90px;font-weight:700" placeholder="—"/></td>'+
     '<td><input type="number" class="form-control form-control-sm fw-bold" id="csat-after-Team-Average" value="'+(savedTeamAvg.csat_after||"")+'" min="0" max="100" step="0.1" style="width:90px;font-weight:700" placeholder="—" oninput="updateTeamCsatTargetBadge()"/></td>'+
     '<td class="text-center" id="team-avg-csat-target">'+(savedTeamAfter===null?'<span class="text-muted">—</span>':savedTeamAfter>=85?'<span class="badge bg-success">✓ Hit</span>':'<span class="badge bg-danger">✗ Missed</span>')+'</td>'+
@@ -2814,7 +2814,7 @@ function renderDashboard(d,csatData,allAgents){
   if(_dashChart1){_dashChart1.destroy();} if(_dashChart2){_dashChart2.destroy();}
   var names=d.agents.map(function(a){return a.agent_name;});
   var scores=d.agents.map(function(a){return a.avg_score;});
-  var colors=d.agents.map(function(a){return a.avg_score>=90?"#1e8449":a.avg_score>=80?"#d4ac0d":"#c0392b";});
+  var colors=d.agents.map(function(a){return a.avg_score>=80?"#1e8449":a.avg_score>=70?"#d4ac0d":"#c0392b";});
   _dashChart1=new Chart(document.getElementById("ch-qa"),{type:"bar",data:{labels:names,datasets:[{label:"QA Score",data:scores,backgroundColor:colors}]},options:{indexAxis:"y",plugins:{legend:{display:false},title:{display:true,text:"QA Scores"}},scales:{x:{min:0,max:100}}}});
   _dashChart2=new Chart(document.getElementById("ch-dsat"),{type:"bar",data:{labels:names,datasets:[{label:"Valid",data:d.agents.map(function(a){return a.dsat_valid;}),backgroundColor:"#c0392b"},{label:"Invalid",data:d.agents.map(function(a){return a.dsat_invalid;}),backgroundColor:"#aab7b8"}]},options:{plugins:{title:{display:true,text:"D-SAT Distribution"}},scales:{x:{stacked:true},y:{stacked:true}}}});
 }
@@ -3373,7 +3373,7 @@ function loadPastTx() {
     _pastTxData.forEach(function(tx, idx) {
       var ko = String(tx.has_ko) === "true" || String(tx.has_ko) === "TRUE";
       var sc = Number(tx.final_score);
-      var pill = ko ? "score-black" : sc>=90 ? "score-green" : sc>=80 ? "score-yellow" : "score-red";
+      var pill = ko ? "score-black" : sc>=80 ? "score-green" : sc>=70 ? "score-yellow" : "score-red";
       html += '<tr>' +
         '<td class="fw-bold">T' + tx.transaction_no + '</td>' +
         '<td>' + tx.date + '</td>' +

@@ -115,6 +115,14 @@ function handleClientRequest(jsonStr) {
     else if (action === "getIntercomAdmins")         result = getIntercomAdmins();
     else if (action === "tagIntercomConversation")   result = tagIntercomConversation(payload);
     else if (action === "testIntercomNoteWebApp")    result = testIntercomNoteWebApp(payload);
+    else if (action === "analyzeConversation")        result = analyzeConversation(payload);
+    else if (action === "getOpenAIKey")               result = getOpenAIKey();
+    else if (action === "analyzeCallTranscript")      result = analyzeCallTranscript(payload);
+    else if (action === "transcribeAudio")            result = transcribeAudio(payload);
+    else if (action === "uploadAudioChunk")           result = uploadAudioChunk(payload);
+    else if (action === "finalizeAudioTranscription") result = finalizeAudioTranscription(payload);
+    else if (action === "createDriveUploadSession")   result = createDriveUploadSession(payload);
+    else if (action === "transcribeFromDrive")        result = transcribeFromDrive(payload);
     else throw new Error("Unknown action: " + action);
 
     // google.script.run cannot serialize Date objects inside nested objects/arrays.
@@ -174,6 +182,14 @@ function doPost(e) {
     else if (action === "getIntercomAdmins")         result = getIntercomAdmins();
     else if (action === "tagIntercomConversation")   result = tagIntercomConversation(payload);
     else if (action === "testIntercomNoteWebApp")    result = testIntercomNoteWebApp(payload);
+    else if (action === "analyzeConversation")        result = analyzeConversation(payload);
+    else if (action === "getOpenAIKey")               result = getOpenAIKey();
+    else if (action === "analyzeCallTranscript")      result = analyzeCallTranscript(payload);
+    else if (action === "transcribeAudio")            result = transcribeAudio(payload);
+    else if (action === "uploadAudioChunk")           result = uploadAudioChunk(payload);
+    else if (action === "finalizeAudioTranscription") result = finalizeAudioTranscription(payload);
+    else if (action === "createDriveUploadSession")   result = createDriveUploadSession(payload);
+    else if (action === "transcribeFromDrive")        result = transcribeFromDrive(payload);
     else throw new Error("Unknown action: " + action);
 
     var safe = JSON.parse(JSON.stringify(result === undefined ? null : result));
@@ -281,6 +297,9 @@ function getSheetData(tabName) {
         row[headers[j]] = localDateStr(v);
       } else if (v === null || v === undefined) {
         row[headers[j]] = "";
+      } else if (headers[j] === "chat_id" || headers[j] === "import_id" || headers[j] === "dsat_id") {
+        // Force ID columns to string — Sheets can convert long numeric IDs to floats
+        row[headers[j]] = String(v).trim();
       } else {
         row[headers[j]] = v;
       }
@@ -296,9 +315,18 @@ function appendRow(tabName, headers, rowObj) {
   if (!sheet) throw new Error("Tab not found: " + tabName);
   var rowArr = headers.map(function(h) {
     var v = rowObj[h];
-    return (v === undefined || v === null) ? "" : v;
+    if (v === undefined || v === null) return "";
+    // Force ID columns to plain text so Sheets doesn't convert long numbers to floats
+    if (h === "chat_id" || h === "import_id" || h === "dsat_id" || h === "batch_id") return String(v).trim();
+    return v;
   });
-  sheet.appendRow(rowArr);
+  var newRow = sheet.appendRow(rowArr);
+  // Set chat_id column to plain text format to prevent numeric conversion
+  var chatIdCol = headers.indexOf("chat_id");
+  if (chatIdCol !== -1) {
+    var lastRow = sheet.getLastRow();
+    sheet.getRange(lastRow, chatIdCol + 1).setNumberFormat("@");
+  }
 }
 
 function generateId(prefix) {
@@ -353,8 +381,8 @@ function calculateScores(ratingsObj) {
 
   var ratingLabel;
   if (hasKo)                ratingLabel = "K.O";
-  else if (finalScore >= 90) ratingLabel = "Nailed It!";
-  else if (finalScore >= 80) ratingLabel = "Almost There!";
+  else if (finalScore >= 80) ratingLabel = "Nailed It!";
+  else if (finalScore >= 70) ratingLabel = "Almost There!";
   else                       ratingLabel = "Not Quite There!";
 
   return {
@@ -1008,23 +1036,16 @@ function validateDSAT(payload) {
 
   appendRow(TABS.dsatValidations, DSAT_VALIDATION_HEADERS, row);
 
-  // Auto-tag + internal note in Intercom (best-effort — does not block save)
-  var tagResult = "not_attempted";
+  // Post internal note to Intercom (best-effort — does not block save)
+  var noteResult = "skipped";
   try {
-    var s = getSettings();
-    var tagId = validationStatus === "valid" ? (s.intercom_tag_valid||"") : (s.intercom_tag_invalid||"");
-    if (!s.intercom_token) { tagResult = "no_token"; }
-    else if (!tagId) { tagResult = "no_tag_id_for_" + validationStatus; }
-    else {
-      autoTagIntercom(row.chat_id, validationStatus);
-      tagResult = "ok";
-    }
-    // Post internal note regardless of tag result
-    var noteResult = "ok";
-    try { postIntercomNote(row.chat_id, row, validationStatus); } catch(ne) { noteResult = "note_error: " + ne.message; }
-  } catch(e) { tagResult = "error: " + e.message; }
+    postIntercomNote(row.chat_id, row, validationStatus);
+    noteResult = "ok";
+  } catch(ne) {
+    noteResult = "note_error: " + ne.message;
+  }
 
-  return { dsat_id: row.dsat_id, validation_status: validationStatus, tag_result: tagResult, note_result: noteResult || "skipped" };
+  return { dsat_id: row.dsat_id, validation_status: validationStatus, note_result: noteResult };
 }
 
 // ============================================================
@@ -1185,6 +1206,391 @@ function testIntercomNote() {
   }
 }
 
+// ============================================================
+// AI CONVERSATION ANALYSIS (Claude API)
+// ============================================================
+
+function analyzeConversation(payload) {
+  var s = getSettings();
+  var apiKey = String(s.claude_api_key || "").trim();
+  if (!apiKey) throw new Error("Claude API key not set. Add it in Settings → Claude API Key.");
+
+  var messages = payload.messages || [];
+  var agentName = payload.agent_name || "Agent";
+
+  // Build plain-text conversation
+  var convText = messages.map(function(m) {
+    var body = String(m.body || m.text || "").replace(/<[^>]+>/g, "").trim();
+    if (!body) return null;
+    var role = m.type === "agent" ? ("Agent ("+agentName+")") : m.type === "note" ? "Internal Note" : "Customer";
+    return role + ": " + body;
+  }).filter(Boolean).join("\n\n");
+
+  if (!convText) throw new Error("No conversation text to analyze.");
+
+  var issueTypes = [
+    "Not Reading Chat History","Premature Closure","Closing Pending Cases (PL Side)",
+    "Not Raising Cases When/As Required","Not Checking/Verifying Before Responding",
+    "Not Asking Clarifying Questions","Not/Missing Answering Customer's Actual Question",
+    "Late Response Time - 1 day and above","Language Mismatch",
+    "Wrong Team/Department Assigned","Lack of Empathy / Inappropriate Tone",
+    "Not Informing Customer of Updates - Late & Ignore",
+    "Not/Missing Collecting Supporting Documents","Wrong Action Taken",
+    "Repetitive/Generic Responses","Incorrect Information Provided",
+    "Not Sharing Correct Links/Hyperlinks","Not Sharing All Items/Documents",
+    "Not Navigating System Properly","Over promise",
+    "Not Educating Customer on Process","Not Providing Clear Guidance",
+    "Ignore Customer Concern","Late Response Time - 1 hour and above","Failed verification"
+  ];
+
+  var prompt = 'You are a senior QA analyst at Platinumlist, a ticketing and events company in the GCC region.\n' +
+    'Your job is to carefully read the customer support conversation below and extract structured information.\n\n' +
+
+    'CRITICAL RULES — READ BEFORE ANALYZING:\n' +
+    '• Read the ENTIRE conversation thoroughly before drawing any conclusions.\n' +
+    '• For "issue_types": ONLY flag an issue if you have direct, undeniable evidence from the agent\'s actual messages. Be conservative. False positives are worse than missing an issue.\n' +
+    '• If the agent DID provide information, details, or guidance — do NOT flag "Not Educating Customer on Process", "Not Providing Clear Guidance", or "Not/Missing Answering Customer\'s Actual Question".\n' +
+    '• If the agent asked for details or clarified — do NOT flag "Not Asking Clarifying Questions".\n' +
+    '• Do NOT flag an issue just because the conversation is short or the customer is unhappy — judge only the AGENT\'s behavior.\n' +
+    '• If no issues are clearly present, return an empty array for issue_types.\n\n' +
+
+    'Return ONLY a valid JSON object with exactly these 3 keys:\n\n' +
+
+    '1. "order_numbers": array of strings — every order number, booking ID, reference code, or ticket number mentioned by anyone. Look for patterns like #, PL-, order, booking, ref, رقم الطلب. Return ["N/A"] if none found.\n\n' +
+
+    '2. "keywords": array of objects {text, category} — extract ALL of the following if present:\n' +
+    '   • Event/artist/concert names (e.g. "Doja Cat", "Layla Ahmadi Concert", "MDL Beast") — category: "event"\n' +
+    '   • Event status (postponed, cancelled, rescheduled) — category: "postponed" or "cancelled"\n' +
+    '   • Customer requests (refund, exchange, upgrade) — category: "refund" or "booking"\n' +
+    '   • Complaints or escalation requests — category: "complaint" or "escalation"\n' +
+    '   • Verification/identity checks — category: "verification"\n' +
+    '   • Payment issues — category: "payment"\n' +
+    '   • Venue or location names — category: "event"\n' +
+    '   • Any other key topic — category: "other"\n' +
+    '   Category must be exactly one of: refund, postponed, cancelled, complaint, escalation, event, verification, payment, account, booking, wrong_info, other\n\n' +
+
+    '3. "issue_types": array of objects {name, reason} — ONLY include if clearly evidenced. Choose names EXACTLY from:\n' +
+    issueTypes.map(function(t){ return '"'+t+'"'; }).join(', ') + '\n\n' +
+
+    'For each issue_type you flag, the "reason" must quote or reference a specific thing the agent said (or failed to say) that proves the issue.\n\n' +
+
+    'Conversation:\n"""\n' + convText + '\n"""\n\n' +
+    'Return ONLY the JSON object. No explanation, no markdown, no code fences.';
+
+  var response = UrlFetchApp.fetch("https://api.anthropic.com/v1/messages", {
+    method: "post",
+    contentType: "application/json",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01"
+    },
+    payload: JSON.stringify({
+      model: "claude-haiku-4-5",
+      max_tokens: 1500,
+      messages: [{ role: "user", content: prompt }]
+    }),
+    muteHttpExceptions: true
+  });
+
+  var code = response.getResponseCode();
+  var text = response.getContentText();
+  if (code >= 400) throw new Error("Claude API " + code + ": " + text.slice(0, 300));
+
+  var result = JSON.parse(text);
+  var raw = (result.content && result.content[0]) ? result.content[0].text : "{}";
+
+  // Strip markdown code fences if present
+  raw = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+
+  // Extract just the JSON object — find first { and last } to handle any trailing text
+  var firstBrace = raw.indexOf("{");
+  var lastBrace  = raw.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    raw = raw.slice(firstBrace, lastBrace + 1);
+  }
+
+  // Try to parse; if it fails, return a safe fallback with the raw text for debugging
+  try {
+    return JSON.parse(raw);
+  } catch (parseErr) {
+    // Return safe empty result rather than crashing
+    Logger.log("analyzeConversation JSON parse failed: " + parseErr + "\nRaw: " + raw.slice(0, 500));
+    return {
+      order_numbers: ["N/A"],
+      keywords: [],
+      issue_types: [],
+      _parse_error: "AI response could not be parsed. Raw (first 200 chars): " + raw.slice(0, 200)
+    };
+  }
+}
+
+function uploadAudioChunk(payload) {
+  var uploadId  = String(payload.upload_id  || "");
+  var chunkIdx  = parseInt(payload.chunk_index) || 0;
+  var chunkData = String(payload.chunk_data || "");
+  var fileName  = String(payload.file_name  || "recording.mp3");
+  if (!uploadId || !chunkData) throw new Error("upload_id and chunk_data required");
+
+  // Decode base64 → binary → store as a Drive file
+  var chunkName = uploadId + "_" + String(chunkIdx).padStart(5, "0");
+  var bytes = Utilities.base64Decode(chunkData);
+  var blob  = Utilities.newBlob(bytes, "application/octet-stream", chunkName);
+  var folderName = "QA_Audio_Temp";
+  var folders = DriveApp.getFoldersByName(folderName);
+  var folder  = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+  var chunkFile = folder.createFile(blob);
+  return { ok: true, chunk: chunkIdx };
+}
+
+function finalizeAudioTranscription(payload) {
+  var uploadId    = String(payload.upload_id    || "");
+  var totalChunks = parseInt(payload.total_chunks) || 0;
+  var mimeType    = String(payload.mime_type    || "audio/mpeg");
+  var fileName    = String(payload.file_name    || "recording.mp3");
+  if (!uploadId || !totalChunks) throw new Error("upload_id and total_chunks required");
+
+  var s = getSettings();
+  var apiKey = String(s.openai_api_key || "").trim();
+  if (!apiKey) throw new Error("OpenAI API key not set. Add it in Settings → Call Transcription.");
+
+  // Reassemble chunks from Drive
+  var folderName = "QA_Audio_Temp";
+  var folders = DriveApp.getFoldersByName(folderName);
+  if (!folders.hasNext()) throw new Error("Temp folder not found in Drive.");
+  var folder = folders.next();
+
+  var allBytes = [];
+  for (var i = 0; i < totalChunks; i++) {
+    var chunkName  = uploadId + "_" + String(i).padStart(5, "0");
+    var chunkFiles = folder.getFilesByName(chunkName);
+    if (!chunkFiles.hasNext()) throw new Error("Missing chunk " + i + " of " + totalChunks + ". Please try again.");
+    var chunkFile  = chunkFiles.next();
+    var chunkBytes = chunkFile.getBlob().getBytes();
+    // push in safe sub-batches to avoid "Maximum call stack size exceeded"
+    var BATCH = 16384;
+    for (var b = 0; b < chunkBytes.length; b += BATCH) {
+      Array.prototype.push.apply(allBytes, chunkBytes.slice(b, b + BATCH));
+    }
+    try { chunkFile.setTrashed(true); } catch(e) {}
+  }
+
+  var audioBlob = Utilities.newBlob(allBytes, mimeType, fileName);
+
+  // Send to Whisper
+  var response = UrlFetchApp.fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "post",
+    headers: { "Authorization": "Bearer " + apiKey },
+    payload: { "file": audioBlob, "model": "whisper-1", "response_format": "json" },
+    muteHttpExceptions: true
+  });
+
+  var code = response.getResponseCode();
+  var text = response.getContentText();
+  if (code >= 400) throw new Error("Whisper API " + code + ": " + text.slice(0, 300));
+
+  var result = JSON.parse(text);
+  return { transcript: result.text || "" };
+}
+
+function createDriveUploadSession(payload) {
+  var mimeType = payload.mime_type || "audio/mpeg";
+  var fileName = payload.file_name || "recording.mp3";
+
+  // Create (or reuse) a temp folder in Drive
+  var folderName = "QA_Audio_Temp";
+  var folders = DriveApp.getFoldersByName(folderName);
+  var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+
+  // Create an empty placeholder file so we have a file ID
+  var placeholderBlob = Utilities.newBlob("", mimeType, fileName);
+  var driveFile = folder.createFile(placeholderBlob);
+  var fileId = driveFile.getId();
+
+  // Make the file writable via resumable upload URL
+  var token = ScriptApp.getOAuthToken();
+  var initResp = UrlFetchApp.fetch(
+    "https://www.googleapis.com/upload/drive/v3/files/" + fileId + "?uploadType=resumable",
+    {
+      method: "patch",
+      headers: {
+        "Authorization": "Bearer " + token,
+        "Content-Type": "application/json",
+        "X-Upload-Content-Type": mimeType
+      },
+      payload: JSON.stringify({ name: fileName, mimeType: mimeType }),
+      muteHttpExceptions: true
+    }
+  );
+
+  var uploadUrl = initResp.getHeaders()["Location"] || initResp.getHeaders()["location"] || "";
+  if (!uploadUrl) throw new Error("Could not get Drive upload URL (status " + initResp.getResponseCode() + "): " + initResp.getContentText().slice(0,200));
+
+  return { upload_url: uploadUrl, file_id: fileId };
+}
+
+function transcribeFromDrive(payload) {
+  var s = getSettings();
+  var apiKey = String(s.openai_api_key || "").trim();
+  if (!apiKey) throw new Error("OpenAI API key not set. Add it in Settings → Call Transcription.");
+
+  var fileId   = String(payload.file_id   || "").trim();
+  var mimeType = String(payload.mime_type || "audio/mpeg").trim();
+  var fileName = String(payload.file_name || "recording.mp3").trim();
+  if (!fileId) throw new Error("No file_id provided.");
+
+  // Read the file from Drive
+  var driveFile = DriveApp.getFileById(fileId);
+  var audioBlob = driveFile.getBlob();
+  audioBlob.setContentType(mimeType);
+  audioBlob.setName(fileName);
+
+  // Call Whisper via UrlFetchApp (runs on Google's servers — no corporate firewall)
+  var response = UrlFetchApp.fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "post",
+    headers: { "Authorization": "Bearer " + apiKey },
+    payload: {
+      "file":            audioBlob,
+      "model":           "whisper-1",
+      "response_format": "json"
+    },
+    muteHttpExceptions: true
+  });
+
+  // Clean up temp file from Drive regardless of Whisper result
+  try { driveFile.setTrashed(true); } catch(e) { Logger.log("Could not trash temp file: " + e); }
+
+  var code = response.getResponseCode();
+  var text = response.getContentText();
+  if (code >= 400) throw new Error("Whisper API " + code + ": " + text.slice(0, 300));
+
+  var result = JSON.parse(text);
+  return { transcript: result.text || "" };
+}
+
+function getOpenAIKey() {
+  var s = getSettings();
+  var key = String(s.openai_api_key || "").trim();
+  if (!key) throw new Error("OpenAI API key not set. Add it in Settings → OpenAI API Key.");
+  return { key: key };
+}
+
+function transcribeAudio(payload) {
+  var s = getSettings();
+  var apiKey = String(s.openai_api_key || "").trim();
+  if (!apiKey) throw new Error("OpenAI API key not set. Add it in Settings → Call Transcription.");
+
+  var base64Data = payload.audio_base64 || "";
+  var mimeType   = payload.mime_type   || "audio/mpeg";
+  var fileName   = payload.file_name   || "recording.mp3";
+
+  if (!base64Data) throw new Error("No audio data received.");
+
+  // Decode base64 → binary blob
+  var audioBytes = Utilities.base64Decode(base64Data);
+  var audioBlob  = Utilities.newBlob(audioBytes, mimeType, fileName);
+
+  // Call Whisper via Apps Script (bypasses corporate firewall)
+  var response = UrlFetchApp.fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "post",
+    headers: { "Authorization": "Bearer " + apiKey },
+    payload: {
+      "file":            audioBlob,
+      "model":           "whisper-1",
+      "response_format": "json"
+    },
+    muteHttpExceptions: true
+  });
+
+  var code = response.getResponseCode();
+  var text = response.getContentText();
+  if (code >= 400) throw new Error("Whisper API " + code + ": " + text.slice(0, 300));
+
+  var result = JSON.parse(text);
+  return { transcript: result.text || "" };
+}
+
+function analyzeCallTranscript(payload) {
+  var s = getSettings();
+  var apiKey = String(s.claude_api_key || "").trim();
+  if (!apiKey) throw new Error("Claude API key not set in Settings.");
+
+  var transcript = String(payload.transcript || "").trim();
+  var agentName  = String(payload.agent_name || "Agent").trim();
+  if (!transcript) throw new Error("No transcript provided.");
+
+  var issueTypes = [
+    "Not Reading Chat History","Premature Closure","Closing Pending Cases (PL Side)",
+    "Not Raising Cases When/As Required","Not Checking/Verifying Before Responding",
+    "Not Asking Clarifying Questions","Not/Missing Answering Customer's Actual Question",
+    "Late Response Time - 1 day and above","Language Mismatch",
+    "Wrong Team/Department Assigned","Lack of Empathy / Inappropriate Tone",
+    "Not Informing Customer of Updates - Late & Ignore",
+    "Not/Missing Collecting Supporting Documents","Wrong Action Taken",
+    "Repetitive/Generic Responses","Incorrect Information Provided",
+    "Not Sharing Correct Links/Hyperlinks","Not Sharing All Items/Documents",
+    "Not Navigating System Properly","Over promise",
+    "Not Educating Customer on Process","Not Providing Clear Guidance",
+    "Ignore Customer Concern","Late Response Time - 1 hour and above","Failed verification"
+  ];
+
+  var prompt =
+    'You are a senior QA analyst at Platinumlist, a GCC ticketing and events company.\n' +
+    'Analyze this call transcript between a customer support agent (' + agentName + ') and a customer.\n\n' +
+
+    'CRITICAL RULES:\n' +
+    '• Read the ENTIRE transcript before drawing any conclusions.\n' +
+    '• agent_tone and customer_tone must reflect what is actually expressed — do not guess.\n' +
+    '• Only flag issue_types if there is direct evidence in what the agent said or failed to say.\n' +
+    '• If the agent provided information or guidance, do NOT flag "Not Providing Clear Guidance" or "Not Educating Customer on Process".\n' +
+    '• If no issues are present, return empty array for issue_types.\n\n' +
+
+    'Return ONLY a valid JSON object with exactly these keys:\n\n' +
+    '{\n' +
+    '  "order_numbers": ["array of order/booking/reference numbers mentioned, or N/A"],\n' +
+    '  "summary": "2-3 sentence plain English summary of the call",\n' +
+    '  "agent_tone": "one of: Professional, Empathetic, Neutral, Impatient, Unprofessional",\n' +
+    '  "customer_tone": "one of: Calm, Frustrated, Angry, Satisfied, Confused",\n' +
+    '  "agent_performance": "one of: Excellent, Good, Needs Improvement, Poor",\n' +
+    '  "performance_notes": "2-3 specific observations about the agent\'s handling of the call",\n' +
+    '  "keywords": [{"text": "keyword", "category": "one of: refund|postponed|cancelled|complaint|escalation|event|verification|payment|account|booking|wrong_info|other"}],\n' +
+    '  "issue_types": [{"name": "exact name from list", "reason": "specific evidence from transcript"}]\n' +
+    '}\n\n' +
+    'issue_types names must be chosen EXACTLY from: ' + issueTypes.map(function(t){ return '"'+t+'"'; }).join(', ') + '\n\n' +
+    'Transcript:\n"""\n' + transcript + '\n"""\n\n' +
+    'Return ONLY the JSON. No markdown, no code fences, no explanation.';
+
+  var response = UrlFetchApp.fetch("https://api.anthropic.com/v1/messages", {
+    method: "post",
+    contentType: "application/json",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01"
+    },
+    payload: JSON.stringify({
+      model: "claude-haiku-4-5",
+      max_tokens: 1500,
+      messages: [{ role: "user", content: prompt }]
+    }),
+    muteHttpExceptions: true
+  });
+
+  var code = response.getResponseCode();
+  var text = response.getContentText();
+  if (code >= 400) throw new Error("Claude API " + code + ": " + text.slice(0, 300));
+
+  var result = JSON.parse(text);
+  var raw = (result.content && result.content[0]) ? result.content[0].text : "{}";
+  raw = raw.replace(/```json\s*/gi,"").replace(/```\s*/g,"").trim();
+  var firstBrace = raw.indexOf("{");
+  var lastBrace  = raw.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) raw = raw.slice(firstBrace, lastBrace + 1);
+  try {
+    return JSON.parse(raw);
+  } catch(e) {
+    return { order_numbers:["N/A"], summary:"", agent_tone:"", customer_tone:"", agent_performance:"", performance_notes:"", keywords:[], issue_types:[], _parse_error: raw.slice(0,200) };
+  }
+}
+
 function getIntercomAdmins() {
   var data = callIntercomAPI("GET", "admins");
   var list = data.admins || data.data || [];
@@ -1259,15 +1665,17 @@ function postIntercomNote(chatId, row, validationStatus) {
   lines.push("Date: " + (row.date || ""));
   if (mentions) lines.push("<br/>" + mentions);
   // Try to post note — if conversation is closed, open it first then re-close
-  var noteBody = { message_type: "note", type: "admin", admin_id: adminId, body: lines.join("<br/>") };
+  var adminIdInt = parseInt(adminId, 10);
+  if (isNaN(adminIdInt)) throw new Error("invalid admin_id: [" + adminId + "]");
+  var noteBody = { message_type: "note", type: "admin", admin_id: adminIdInt, body: lines.join("<br/>") };
   try {
     callIntercomAPI("POST", "conversations/" + chatId + "/reply", noteBody);
   } catch(e) {
     if (String(e.message).indexOf("closed") > -1 || String(e.message).indexOf("403") > -1 || String(e.message).indexOf("422") > -1) {
       // Reopen conversation, post note, close again
-      try { callIntercomAPI("PUT", "conversations/" + chatId, { state: "open", admin_id: adminId }); } catch(re) {}
+      try { callIntercomAPI("PUT", "conversations/" + chatId, { state: "open", admin_id: adminIdInt }); } catch(re) {}
       callIntercomAPI("POST", "conversations/" + chatId + "/reply", noteBody);
-      try { callIntercomAPI("PUT", "conversations/" + chatId, { state: "closed", admin_id: adminId }); } catch(ce) {}
+      try { callIntercomAPI("PUT", "conversations/" + chatId, { state: "closed", admin_id: adminIdInt }); } catch(ce) {}
     } else {
       throw e;
     }
@@ -1293,10 +1701,19 @@ function getAgentMonthlySummary(payload) {
   }
 
   var weakAreas    = detectWeakAreas(transactions);
-  var allVal       = getDSATValidations({ agentName: agentName, month: month, year: year });
   var allImp       = getDSATImports({ agentName: agentName, month: month, year: year });
-  var validDsats   = allVal.filter(function(r){ return r.validation_status === "valid"; });
-  var invalidDsats = allVal.filter(function(r){ return r.validation_status === "invalid"; });
+
+  // Match validations by chat_id across ALL validations (no month/agent filter)
+  // This correctly handles cases where a chat was validated under a different month or agent name spelling
+  var allValsGlobal    = getDSATValidations({});
+  var impChatIds       = allImp.map(function(i){ return String(i.chat_id).trim(); });
+  var allVal           = allValsGlobal.filter(function(v){ return impChatIds.indexOf(String(v.chat_id).trim()) !== -1; });
+  var validatedChatIds = allValsGlobal.map(function(v){ return String(v.chat_id).trim(); });
+  var validDsats       = allVal.filter(function(r){ return r.validation_status === "valid"; });
+  var invalidDsats     = allVal.filter(function(r){ return r.validation_status === "invalid"; });
+  var pendingImports   = allImp.filter(function(imp){
+    return !validatedChatIds.includes(String(imp.chat_id).trim());
+  });
 
   var issueDist = {};
   validDsats.forEach(function(r) {
@@ -1328,7 +1745,7 @@ function getAgentMonthlySummary(payload) {
     dsat_validated:      allVal.length,
     dsat_valid:          validDsats.length,
     dsat_invalid:        invalidDsats.length,
-    dsat_pending:        allImp.length - allVal.length,
+    dsat_pending:        pendingImports.length,
     valid_dsats:         validDsats,
     issue_distribution:  issueDistArr,
     agent_sheet_link:    sheetLink
@@ -1368,7 +1785,7 @@ function getManagerDashboard(payload) {
   var ranked = Object.keys(agentQA).map(function(name) {
     var scores = agentQA[name];
     var avg = Math.round(scores.reduce(function(s,v){ return s+v; }, 0) / scores.length * 100) / 100;
-    var rl = avg >= 90 ? "Nailed It!" : avg >= 80 ? "Almost There!" : "Not Quite There!";
+    var rl = avg >= 80 ? "Nailed It!" : avg >= 70 ? "Almost There!" : "Not Quite There!";
     return {
       agent_name:   name,
       avg_score:    avg,
@@ -1403,7 +1820,7 @@ function getManagerDashboard(payload) {
     year:             year,
     agents:           ranked,
     team_avg:         teamAvg,
-    agents_above_90:  ranked.filter(function(r){ return r.avg_score >= 90; }).length,
+    agents_above_90:  ranked.filter(function(r){ return r.avg_score >= 80; }).length,
     total_valid_dsat: totalValidDsat,
     total_raw_dsat:   allImp.length,
     top_issue_type:   topIssue || "N/A",
@@ -1772,7 +2189,7 @@ function generateCoachingEmail(payload) {
   L.push("");
   L.push("-- QA PERFORMANCE -------------------------------------------------");
   L.push("Average Score : " + summary.avg_score + " / 100");
-  var rl = summary.avg_score >= 90 ? "Nailed It!" : summary.avg_score >= 80 ? "Almost There!" : "Not Quite There!";
+  var rl = summary.avg_score >= 80 ? "Nailed It!" : summary.avg_score >= 70 ? "Almost There!" : "Not Quite There!";
   L.push("Rating        : " + rl);
   L.push("Transactions  : " + summary.transactions.length + " of 8 evaluated");
   L.push("");
@@ -1862,4 +2279,334 @@ function generateCoachingEmail(payload) {
 
   var subject = "QA Coaching -- " + agentName + " -- " + monthLabel;
   return { subject: subject, body: L.join("\n"), summary: summary };
+}
+
+// ============================================================
+// TICKET FINDABILITY ANALYSIS — for Product / Business Teams
+// Run one of these from Apps Script editor:
+//   runDecemberAnalysis()  → December 2025
+//   runJanuaryAnalysis()   → January 2026
+// Results written live to Google Sheet tabs per month.
+// ============================================================
+
+function runDecemberAnalysis() {
+  _runTicketAnalysis(
+    1764547200,              // Dec  1, 2025 00:00:00 UTC
+    1767225599,              // Dec 31, 2025 23:59:59 UTC
+    "TicketAnalysis_Dec2025",
+    "ticketCursor_Dec2025"
+  );
+}
+
+function runJanuaryAnalysis() {
+  _runTicketAnalysis(
+    1767225600,              // Jan  1, 2026 00:00:00 UTC
+    1769903999,              // Jan 31, 2026 23:59:59 UTC
+    "TicketAnalysis_Jan2026",
+    "ticketCursor_Jan2026"
+  );
+}
+
+// Keep old name working too (runs December)
+function runTicketFindabilityAnalysis() { runDecemberAnalysis(); }
+
+function _runTicketAnalysis(START_TS, END_TS, TAB_NAME, CHECKPOINT_KEY) {
+
+  var MAX_PAGES     = 60;
+
+  var settings      = getSettings();
+  var intercomToken = settings.intercom_token || "";
+  var claudeKey     = settings.claude_api_key  || "";
+  if (!intercomToken) throw new Error("Intercom token not configured in Settings.");
+  if (!claudeKey)     throw new Error("Claude API key not configured in Settings.");
+
+  var ss  = SpreadsheetApp.openById(SHEET_ID);
+  var tab = ss.getSheetByName(TAB_NAME);
+
+  // ── Resume or fresh start ────────────────────────────────────
+  var savedCursor  = PropertiesService.getScriptProperties().getProperty(CHECKPOINT_KEY);
+  var savedCounts  = PropertiesService.getScriptProperties().getProperty(CHECKPOINT_KEY + "_counts");
+  var resuming     = !!(savedCursor && tab && tab.getLastRow() > 1);
+
+  var rowNum     = 0;
+  var matchCount = 0;
+  var errorCount = 0;
+
+  if (resuming) {
+    // Pick up from saved position
+    var counts  = JSON.parse(savedCounts || '{"row":0,"match":0,"error":0}');
+    rowNum     = counts.row;
+    matchCount = counts.match;
+    errorCount = counts.error;
+    Logger.log("▶ RESUMING from row " + rowNum + " | cursor: " + savedCursor.slice(0,20) + "...");
+  } else {
+    // Fresh start — recreate sheet
+    if (tab) ss.deleteSheet(tab);
+    tab = ss.insertSheet(TAB_NAME);
+    tab.appendRow(["#", "Conversation ID", "Date", "Customer Email", "Match (YES/NO)", "Reason", "First Customer Message"]);
+    tab.getRange(1, 1, 1, 7).setFontWeight("bold").setBackground("#4a0e8f").setFontColor("#ffffff");
+    tab.setFrozenRows(1);
+    PropertiesService.getScriptProperties().deleteProperty(CHECKPOINT_KEY);
+    PropertiesService.getScriptProperties().deleteProperty(CHECKPOINT_KEY + "_counts");
+    Logger.log("🆕 Fresh start — " + TAB_NAME);
+  }
+
+  var cursor    = resuming ? savedCursor : null;
+  var pageCount = 0;
+  var batchRows = [];
+
+  Logger.log("Starting Ticket Findability Analysis — " + TAB_NAME + "...");
+
+  do {
+    // ── Fetch one page of search results ─────────────────────
+    var searchBody = {
+      query: {
+        operator: "AND",
+        value: [
+          { field: "created_at", operator: ">", value: START_TS },
+          { field: "created_at", operator: "<", value: END_TS   }
+        ]
+      },
+      pagination: { per_page: 20 }  // reduced from 50 to lower data per call
+    };
+    if (cursor) searchBody.pagination.starting_after = cursor;
+
+    var searchRes;
+    var retries = 0;
+    while (retries < 3) {
+      try {
+        searchRes = callIntercomAPI("POST", "conversations/search", searchBody);
+        break; // success
+      } catch(e) {
+        retries++;
+        if (e.message.indexOf("Bandwidth quota") !== -1 && retries < 3) {
+          Logger.log("⚠️ Bandwidth quota hit on search — waiting 90 seconds before retry " + retries + "/3...");
+          Utilities.sleep(90000);
+        } else {
+          Logger.log("Search failed after " + retries + " retries: " + e.message);
+          // Save checkpoint so next run can resume
+          if (cursor) {
+            PropertiesService.getScriptProperties().setProperty(CHECKPOINT_KEY, cursor);
+            PropertiesService.getScriptProperties().setProperty(CHECKPOINT_KEY + "_counts",
+              JSON.stringify({ row: rowNum, match: matchCount, error: errorCount }));
+          }
+          // Flush any remaining rows before exiting
+          if (batchRows.length > 0) {
+            tab.getRange(tab.getLastRow() + 1, 1, batchRows.length, 7).setValues(batchRows);
+            batchRows = [];
+            SpreadsheetApp.flush();
+          }
+          Logger.log("⏸ Paused at row " + rowNum + ". Run again to resume from checkpoint.");
+          return "PAUSED at row " + rowNum + " — quota hit. Run again in 1-2 hours to resume.";
+        }
+      }
+    }
+    if (!searchRes) break;
+
+    var convList = searchRes.conversations || [];
+    if (convList.length === 0) break;
+
+    // ── Classify each conversation using source.body only ────
+    // No secondary Intercom API call — zero bandwidth quota risk.
+    for (var i = 0; i < convList.length; i++) {
+      var conv = convList[i];
+      rowNum++;
+
+      var convDate  = conv.created_at
+        ? Utilities.formatDate(new Date(conv.created_at * 1000), "UTC", "yyyy-MM-dd")
+        : "";
+
+      // Customer email — already in search result contacts list (no extra fetch)
+      var custEmail = "";
+      try {
+        var ctcs = conv.contacts && conv.contacts.contacts;
+        if (ctcs && ctcs.length && ctcs[0].email) custEmail = ctcs[0].email;
+      } catch(e) {}
+
+      // First customer message from source (already in search result)
+      var firstMsg = "";
+      try {
+        if (conv.source && conv.source.body) {
+          firstMsg = conv.source.body.replace(/<[^>]+>/g, "").trim().slice(0, 400);
+        }
+      } catch(e) {}
+
+      var match  = "NO";
+      var reason = "";
+
+      if (firstMsg.length > 10) {
+        // ── Step 1: keyword pre-filter ──────────────────────────
+        // Only call Claude if message contains at least one relevant word.
+        // Skips ~85-90% of conversations (refunds, event info, etc.)
+        if (_hasTicketKeyword(firstMsg)) {
+          try {
+            var res = _classifyTicketFindability(firstMsg, claudeKey);
+            match  = res.match;
+            reason = res.reason;
+            if (match === "YES") matchCount++;
+          } catch(e) {
+            errorCount++;
+            reason = "Claude error: " + e.message.slice(0, 80);
+          }
+        } else {
+          // Skipped — no ticket-related keyword found
+          match  = "NO";
+          reason = "Skipped — no ticket keyword";
+        }
+      } else {
+        reason = "No message text";
+      }
+
+      batchRows.push([rowNum, conv.id, convDate, custEmail, match, reason, firstMsg.slice(0, 200)]);
+
+      // Flush to sheet every 20 rows so data is safe if it times out
+      if (batchRows.length >= 20) {
+        tab.getRange(tab.getLastRow() + 1, 1, batchRows.length, 7).setValues(batchRows);
+        // Highlight YES rows
+        var sheetRow = tab.getLastRow() - batchRows.length + 1;
+        batchRows.forEach(function(r, ri) {
+          if (r[4] === "YES") tab.getRange(sheetRow + ri, 5).setBackground("#c6efce").setFontWeight("bold");
+        });
+        batchRows = [];
+        SpreadsheetApp.flush();
+      }
+    }
+
+    pageCount++;
+    cursor = (searchRes.pages && searchRes.pages.next && searchRes.pages.next.starting_after)
+             ? searchRes.pages.next.starting_after : null;
+
+    // Save checkpoint so we can resume if stopped or timed out
+    if (cursor) {
+      PropertiesService.getScriptProperties().setProperty(CHECKPOINT_KEY, cursor);
+      PropertiesService.getScriptProperties().setProperty(CHECKPOINT_KEY + "_counts",
+        JSON.stringify({ row: rowNum, match: matchCount, error: errorCount }));
+    }
+
+    var claudeCalls = rowNum - errorCount; // approximate
+    Logger.log("Page " + pageCount + " done | Scanned: " + rowNum + " | Sent to Claude: ~" +
+               Math.round(rowNum * 0.15) + " (keyword filtered) | Matches: " + matchCount +
+               (cursor ? " | Checkpoint saved ✓" : " | Last page ✅"));
+    if (cursor) Utilities.sleep(800);
+
+  } while (cursor && pageCount < MAX_PAGES);
+
+  // Flush remaining rows
+  if (batchRows.length > 0) {
+    tab.getRange(tab.getLastRow() + 1, 1, batchRows.length, 7).setValues(batchRows);
+    var sheetRow = tab.getLastRow() - batchRows.length + 1;
+    batchRows.forEach(function(r, ri) {
+      if (r[4] === "YES") tab.getRange(sheetRow + ri, 5).setBackground("#c6efce").setFontWeight("bold");
+    });
+  }
+
+  // ── Summary ──────────────────────────────────────────────────
+  tab.appendRow(["—", "—", "—", "—", "—", "—", "—"]);
+  tab.appendRow(["SUMMARY", "", "", "Total Conversations:", rowNum, "Can't find ticket (YES):", matchCount]);
+  tab.appendRow(["", "", "", "Errors / No text:", errorCount, "Match Rate:", rowNum > 0 ? (matchCount/rowNum*100).toFixed(1)+"%" : "0%"]);
+  tab.getRange(tab.getLastRow()-1, 1, 2, 7).setFontWeight("bold").setBackground("#fff2cc");
+  SpreadsheetApp.flush();
+
+  // Clear checkpoint — analysis complete
+  PropertiesService.getScriptProperties().deleteProperty(CHECKPOINT_KEY);
+  PropertiesService.getScriptProperties().deleteProperty(CHECKPOINT_KEY + "_counts");
+
+  var summary = "✅ COMPLETE! Analysed: " + rowNum + " | Matches: " + matchCount + " | Errors: " + errorCount;
+  Logger.log(summary);
+  return summary;
+}
+
+// Keyword pre-filter — returns true only if message likely relates to ticket findability
+function _hasTicketKeyword(text) {
+  var t = text.toLowerCase();
+  var keywords = [
+    // English
+    "ticket", "booking", "e-ticket", "eticket",
+    "can't find", "cannot find", "cant find",
+    "didn't receive", "did not receive", "not received",
+    "not showing", "not show", "don't see", "do not see", "cant see", "can't see",
+    "where is my", "where are my",
+    "no ticket", "missing ticket",
+    "didn't get", "did not get",
+    "not arrived", "didn't arrive",
+    "can't access", "cannot access",
+    "how do i get my", "how to get my",
+    "never got", "never received",
+    "purchase", "bought", "paid",
+    // Arabic
+    "تذكرة", "تذاكر",
+    "ما لقيت", "ما وجدت", "ما أشوف", "ما شفت",
+    "ما وصل", "ما وصلت", "ما جاني", "ما جتني",
+    "وين تذكر", "فين تذكر",
+    "ما عندي تذكرة", "ما عندي تذاكر",
+    "كيف أحصل", "كيف اوصل",
+    "دفعت", "اشتريت", "اشترينا",
+    "ما ظهرت", "ما ظهر",
+    "ما وصلني إيميل", "ما وصلني ايميل"
+  ];
+  for (var i = 0; i < keywords.length; i++) {
+    if (t.indexOf(keywords[i]) !== -1) return true;
+  }
+  return false;
+}
+
+// Claude classifier — returns {match: "YES"/"NO", reason: string}
+function _classifyTicketFindability(text, apiKey) {
+  var prompt =
+    'You are analysing a Platinumlist customer support conversation. The conversation may be in English, Arabic, or both.\n\n' +
+    'Task: Decide if the customer is saying they CANNOT FIND, SEE, ACCESS or LOCATE their ticket(s) after completing a purchase.\n\n' +
+
+    '✅ Examples that are YES (English):\n' +
+    '- "I bought tickets but I cannot find them"\n' +
+    '- "Where are my tickets?"\n' +
+    '- "My tickets did not arrive"\n' +
+    '- "I don\'t see the ticket in my account or email"\n' +
+    '- "I purchased but I have no ticket"\n' +
+    '- "How do I get my ticket?"\n' +
+    '- "I can\'t access my booking"\n\n' +
+
+    '✅ Examples that are YES (Arabic):\n' +
+    '- "اشتريت تذاكر بس ما لقيتها" (bought tickets but can\'t find them)\n' +
+    '- "وين تذاكري؟" (where are my tickets?)\n' +
+    '- "ما وصلتني التذكرة" (ticket didn\'t arrive to me)\n' +
+    '- "ما أشوف التذاكر في حسابي" (don\'t see tickets in my account)\n' +
+    '- "دفعت بس ما عندي تذكرة" (paid but have no ticket)\n' +
+    '- "تذاكري ما ظهرت" (my tickets didn\'t appear)\n' +
+    '- "كيف أحصل على تذكرتي؟" (how do I get my ticket?)\n' +
+    '- "ما جاني أي إيميل فيه التذكرة" (didn\'t receive any email with the ticket)\n\n' +
+
+    '❌ Examples that are NO:\n' +
+    '- Asking for a refund or cancellation\n' +
+    '- Asking about event details, timing, or location\n' +
+    '- General complaints not about finding tickets\n' +
+    '- Complaints about wrong tickets or wrong event (different issue)\n' +
+    '- Already resolved — agent already sent the ticket in the same conversation\n\n' +
+
+    'Customer message:\n' + text + '\n\n' +
+    'Reply in this exact format:\n' +
+    'MATCH: YES or NO\n' +
+    'REASON: one short sentence explaining why';
+
+  var res = UrlFetchApp.fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json"
+    },
+    payload: JSON.stringify({
+      model: "claude-haiku-4-5",
+      max_tokens: 60,
+      messages: [{ role: "user", content: prompt }]
+    }),
+    muteHttpExceptions: true
+  });
+
+  var data = JSON.parse(res.getContentText());
+  if (data.error) return { match: "NO", reason: "Claude error: " + (data.error.message || "") };
+
+  var raw    = (data.content && data.content[0] && data.content[0].text) || "";
+  var mLine  = (raw.match(/MATCH:\s*(YES|NO)/i)  || [])[1] || "NO";
+  var rLine  = (raw.match(/REASON:\s*(.+)/i)      || [])[1] || "";
+  return { match: mLine.toUpperCase(), reason: rLine.trim().slice(0, 150) };
 }
