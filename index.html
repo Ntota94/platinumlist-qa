@@ -2711,13 +2711,15 @@ function loadDashboard(){
   document.getElementById("dashboard-content").innerHTML='<div class="text-muted">Loading...</div>';
   Promise.all([
     api("getManagerDashboard",{month:month,year:String(year)}),
-    api("getCsatData",{month:month,year:String(year)})
-  ]).then(function(res){ renderDashboard(res[0], res[1]||{}); })
+    api("getCsatData",{month:month,year:String(year)}),
+    api("getAgents",{})
+  ]).then(function(res){ renderDashboard(res[0], res[1]||{}, res[2]||[]); })
   .catch(function(err){ document.getElementById("dashboard-content").innerHTML='<div class="alert alert-danger">'+err.message+'</div>'; });
 }
 
-function renderDashboard(d,csatData){
+function renderDashboard(d,csatData,allAgents){
   if(!csatData) csatData={};
+  if(!allAgents) allAgents=[];
   var html='<div class="row g-3 mb-4">';
   html+='<div class="col-md-3"><div class="card card-m p-3 text-center"><div class="text-muted small">Team Avg Score</div><div class="score-big text-primary">'+d.team_avg+'</div></div></div>';
   html+='<div class="col-md-3"><div class="card card-m p-3 text-center"><div class="text-muted small">Agents ≥ 90</div><div class="score-big text-success">'+d.agents_above_90+'<small class="fs-5 text-muted"> / '+d.agents.length+'</small></div></div></div>';
@@ -2757,38 +2759,51 @@ function renderDashboard(d,csatData){
   html+='<div class="small text-muted mb-2">Targets: <strong class="text-success">QA ≥ 90%</strong> &nbsp;|&nbsp; <strong class="text-success">C-SAT after validation ≥ 85%</strong>. Enter C-SAT % manually and click Save.</div>';
   html+='<div class="card card-m p-0 mb-3"><div class="table-responsive"><table class="table table-sm table-bordered mb-0" id="csat-tgt-tbl">';
   html+='<thead class="table-light"><tr><th>Agent</th><th>QA Score</th><th>QA Target</th><th>C-SAT Before Val (%)</th><th>C-SAT After Val (%)</th><th>C-SAT Target</th></tr></thead><tbody>';
-  d.agents.forEach(function(a){
-    var saved=csatData[a.agent_name]||{};
-    var sid=a.agent_name.replace(/[^a-zA-Z0-9]/g,"-");
-    var qaHit=a.avg_score>=90;
+  // Build QA lookup map from agents who have QA transactions this month
+  var qaMap={};
+  d.agents.forEach(function(a){ qaMap[a.agent_name]=a; });
+
+  // Show ALL agents from Agents sheet (sorted: QA agents first by rank, then C-SAT-only agents alphabetically)
+  var qaAgents = d.agents.map(function(a){ return a.agent_name; });
+  var csatOnlyAgents = allAgents
+    .map(function(a){ return a["Agent name"]||""; })
+    .filter(function(n){ return n && !qaMap[n]; })
+    .sort();
+  var allAgentNames = qaAgents.concat(csatOnlyAgents);
+
+  allAgentNames.forEach(function(name){
+    var saved=csatData[name]||{};
+    var sid=name.replace(/[^a-zA-Z0-9]/g,"-");
+    var qa=qaMap[name];
     var csatAfterVal=(saved.csat_after!==undefined&&saved.csat_after!=="") ? parseFloat(saved.csat_after) : null;
     var csatHit=csatAfterVal!==null ? (csatAfterVal>=85) : null;
-    html+='<tr>'+
-      '<td class="fw-semibold">'+a.agent_name+'</td>'+
-      '<td><span class="score-pill '+(a.avg_score>=90?"score-green":a.avg_score>=80?"score-yellow":"score-red")+'">'+a.avg_score+'</span></td>'+
-      '<td class="text-center">'+(qaHit?'<span class="badge bg-success">✓ Hit</span>':'<span class="badge bg-danger">✗ Missed</span>')+'</td>'+
-      '<td><input type="number" class="form-control form-control-sm" id="csat-before-'+sid+'" value="'+(saved.csat_before||"")+'" min="0" max="100" step="0.1" style="width:90px" placeholder="—" oninput="updateCsatTeamAvg()"/></td>'+
-      '<td><input type="number" class="form-control form-control-sm" id="csat-after-'+sid+'" value="'+(saved.csat_after||"")+'" min="0" max="100" step="0.1" style="width:90px" placeholder="—" oninput="updateCsatTeamAvg()"/></td>'+
+    var qaScoreCell = qa
+      ? '<span class="score-pill '+(qa.avg_score>=90?"score-green":qa.avg_score>=80?"score-yellow":"score-red")+'">'+qa.avg_score+'</span>'
+      : '<span class="text-muted small">—</span>';
+    var qaTargetCell = qa
+      ? (qa.avg_score>=90?'<span class="badge bg-success">✓ Hit</span>':'<span class="badge bg-danger">✗ Missed</span>')
+      : '<span class="text-muted small">C-SAT only</span>';
+    html+='<tr data-agent="'+name.replace(/"/g,"&quot;")+'">'+
+      '<td class="fw-semibold">'+name+(qa?'':'<span class="badge bg-secondary ms-1" style="font-size:.65rem">C-SAT</span>')+'</td>'+
+      '<td>'+qaScoreCell+'</td>'+
+      '<td class="text-center">'+qaTargetCell+'</td>'+
+      '<td><input type="number" class="form-control form-control-sm" id="csat-before-'+sid+'" value="'+(saved.csat_before||"")+'" min="0" max="100" step="0.1" style="width:90px" placeholder="—"/></td>'+
+      '<td><input type="number" class="form-control form-control-sm" id="csat-after-'+sid+'" value="'+(saved.csat_after||"")+'" min="0" max="100" step="0.1" style="width:90px" placeholder="—"/></td>'+
       '<td class="text-center">'+(csatHit===null?'<span class="text-muted small">—</span>':csatHit?'<span class="badge bg-success">✓ Hit</span>':'<span class="badge bg-danger">✗ Missed</span>')+'</td>'+
       '</tr>';
   });
-  // Totals row
+
+  // Team Average row — QA avg calculated, C-SAT entered MANUALLY
   var totalQaAvg = d.agents.length ? Math.round(d.agents.reduce(function(s,a){return s+a.avg_score;},0)/d.agents.length*100)/100 : 0;
-  var csatBeforeVals=[],csatAfterVals=[];
-  d.agents.forEach(function(a){
-    var saved=csatData[a.agent_name]||{};
-    if(saved.csat_before!==undefined&&saved.csat_before!=="") csatBeforeVals.push(parseFloat(saved.csat_before));
-    if(saved.csat_after!==undefined&&saved.csat_after!=="") csatAfterVals.push(parseFloat(saved.csat_after));
-  });
-  var avgBefore=csatBeforeVals.length?Math.round(csatBeforeVals.reduce(function(s,v){return s+v;},0)/csatBeforeVals.length*10)/10:null;
-  var avgAfter =csatAfterVals.length ?Math.round(csatAfterVals.reduce(function(s,v){return s+v;},0)/csatAfterVals.length*10)/10:null;
-  html+='<tr class="table-light fw-bold">'+
+  var savedTeamAvg = csatData["Team Average"]||{};
+  var savedTeamAfter = (savedTeamAvg.csat_after!==undefined&&savedTeamAvg.csat_after!=="") ? parseFloat(savedTeamAvg.csat_after) : null;
+  html+='<tr class="table-light fw-bold" data-agent="Team Average" style="border-top:2px solid #dee2e6">'+
     '<td>Team Average</td>'+
     '<td><span class="score-pill '+(totalQaAvg>=90?"score-green":totalQaAvg>=80?"score-yellow":"score-red")+'">'+totalQaAvg+'</span></td>'+
     '<td class="text-center">'+(totalQaAvg>=90?'<span class="badge bg-success">✓ Hit</span>':'<span class="badge bg-danger">✗ Missed</span>')+'</td>'+
-    '<td class="text-center fw-bold" id="team-avg-csat-before">'+(avgBefore!==null?avgBefore+'%':'—')+'</td>'+
-    '<td class="text-center fw-bold" id="team-avg-csat-after">'+(avgAfter!==null?avgAfter+'%':'—')+'</td>'+
-    '<td class="text-center" id="team-avg-csat-target">'+(avgAfter===null?'<span class="text-muted">—</span>':avgAfter>=85?'<span class="badge bg-success">✓ Hit</span>':'<span class="badge bg-danger">✗ Missed</span>')+'</td>'+
+    '<td><input type="number" class="form-control form-control-sm fw-bold" id="csat-before-Team-Average" value="'+(savedTeamAvg.csat_before||"")+'" min="0" max="100" step="0.1" style="width:90px;font-weight:700" placeholder="—"/></td>'+
+    '<td><input type="number" class="form-control form-control-sm fw-bold" id="csat-after-Team-Average" value="'+(savedTeamAvg.csat_after||"")+'" min="0" max="100" step="0.1" style="width:90px;font-weight:700" placeholder="—" oninput="updateTeamCsatTargetBadge()"/></td>'+
+    '<td class="text-center" id="team-avg-csat-target">'+(savedTeamAfter===null?'<span class="text-muted">—</span>':savedTeamAfter>=85?'<span class="badge bg-success">✓ Hit</span>':'<span class="badge bg-danger">✗ Missed</span>')+'</td>'+
     '</tr>';
   html+='</tbody></table></div></div>';
   html+='<button class="btn btn-accent mb-4" onclick="saveDashboardCsat()"><i class="bi bi-save me-1"></i>Save C-SAT Data</button> <span id="csat-save-result" class="small ms-1"></span>';
@@ -3602,28 +3617,13 @@ function saveAllPending(){
   });
 }
 
-// --- LIVE C-SAT TEAM AVERAGE UPDATE ---
-function updateCsatTeamAvg(){
-  var beforeVals=[], afterVals=[];
-  // Collect all csat-before-* and csat-after-* inputs (skip team avg row which has no inputs)
-  var rows=document.querySelectorAll("#csat-tgt-tbl tbody tr");
-  rows.forEach(function(row){
-    var agent=row.cells[0].textContent.trim();
-    if(agent==="Team Average") return; // skip totals row
-    var sid=agent.replace(/[^a-zA-Z0-9]/g,"-");
-    var bEl=document.getElementById("csat-before-"+sid);
-    var aEl=document.getElementById("csat-after-"+sid);
-    if(bEl && bEl.value!=="") beforeVals.push(parseFloat(bEl.value));
-    if(aEl && aEl.value!=="") afterVals.push(parseFloat(aEl.value));
-  });
-  var avgB=beforeVals.length ? Math.round(beforeVals.reduce(function(s,v){return s+v;},0)/beforeVals.length*10)/10 : null;
-  var avgA=afterVals.length  ? Math.round(afterVals.reduce(function(s,v){return s+v;},0)/afterVals.length*10)/10  : null;
-  var cellB=document.getElementById("team-avg-csat-before");
-  var cellA=document.getElementById("team-avg-csat-after");
+// --- TEAM C-SAT TARGET BADGE (updates when you type in Team Average C-SAT After field) ---
+function updateTeamCsatTargetBadge(){
+  var el=document.getElementById("csat-after-Team-Average");
   var cellT=document.getElementById("team-avg-csat-target");
-  if(cellB) cellB.innerHTML = avgB!==null ? '<span style="color:var(--brand)">'+avgB+'%</span>' : '—';
-  if(cellA) cellA.innerHTML = avgA!==null ? '<span style="color:var(--brand)">'+avgA+'%</span>' : '—';
-  if(cellT) cellT.innerHTML = avgA===null ? '<span class="text-muted">—</span>' : avgA>=85 ? '<span class="badge bg-success">✓ Hit</span>' : '<span class="badge bg-danger">✗ Missed</span>';
+  if(!el||!cellT) return;
+  var val=el.value!=="" ? parseFloat(el.value) : null;
+  cellT.innerHTML = val===null ? '<span class="text-muted">—</span>' : val>=85 ? '<span class="badge bg-success">✓ Hit</span>' : '<span class="badge bg-danger">✗ Missed</span>';
 }
 
 // --- SAVE DASHBOARD C-SAT DATA ---
@@ -3634,10 +3634,12 @@ function saveDashboardCsat(){
 
   var rows=document.querySelectorAll("#csat-tgt-tbl tbody tr");
   rows.forEach(function(row){
-    var agent=row.cells[0].textContent.trim();
+    var agent=row.dataset.agent||(row.cells[0].textContent.trim());
+    if(!agent) return;
     var sid=agent.replace(/[^a-zA-Z0-9]/g,"-");
     var befEl=document.getElementById("csat-before-"+sid);
     var aftEl=document.getElementById("csat-after-"+sid);
+    if(!befEl&&!aftEl) return; // skip rows with no inputs
     data[agent]={
       csat_before: befEl ? (befEl.value||"") : "",
       csat_after:  aftEl ? (aftEl.value||"") : ""
