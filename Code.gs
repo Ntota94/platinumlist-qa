@@ -90,6 +90,7 @@ function handleClientRequest(jsonStr) {
     else if (action === "getAgentMonthlySummary") result = getAgentMonthlySummary(payload);
     else if (action === "getManagerDashboard")    result = getManagerDashboard(payload);
     else if (action === "generateCoachingEmail")  result = generateCoachingEmail(payload);
+    else if (action === "sendCoachingEmail")       result = sendCoachingEmail(payload);
     else if (action === "setupSheet")             result = setupSheet();
     else if (action === "rebuildDSATImports")     result = rebuildDSATImports();
     else if (action === "rebuildDSATValidations") result = rebuildDSATValidations();
@@ -157,6 +158,7 @@ function doPost(e) {
     else if (action === "getAgentMonthlySummary") result = getAgentMonthlySummary(payload);
     else if (action === "getManagerDashboard")    result = getManagerDashboard(payload);
     else if (action === "generateCoachingEmail")  result = generateCoachingEmail(payload);
+    else if (action === "sendCoachingEmail")       result = sendCoachingEmail(payload);
     else if (action === "setupSheet")             result = setupSheet();
     else if (action === "rebuildDSATImports")     result = rebuildDSATImports();
     else if (action === "rebuildDSATValidations") result = rebuildDSATValidations();
@@ -2278,7 +2280,45 @@ function generateCoachingEmail(payload) {
   L.push(coordTitle);
 
   var subject = "QA Coaching -- " + agentName + " -- " + monthLabel;
-  return { subject: subject, body: L.join("\n"), summary: summary };
+
+  // Get agent email for direct-send button
+  var agents = getAgents();
+  var agentRecord = null;
+  for (var i = 0; i < agents.length; i++) {
+    if ((agents[i]["Agent name"] || "").toLowerCase() === agentName.toLowerCase()) {
+      agentRecord = agents[i]; break;
+    }
+  }
+  var agentEmail = agentRecord ? (agentRecord["Email"] || "") : "";
+
+  return { subject: subject, body: L.join("\n"), summary: summary, agent_email: agentEmail };
+}
+
+// ============================================================
+// SEND COACHING EMAIL — direct send via GmailApp
+// ============================================================
+function sendCoachingEmail(payload) {
+  var agentName = String(payload.agentName || payload.agent_name || "").trim();
+  var subject   = String(payload.subject   || "").trim();
+  var body      = String(payload.body      || "").trim();
+  var toEmail   = String(payload.to_email  || "").trim();
+
+  if (!subject) throw new Error("Subject is required.");
+  if (!body)    throw new Error("Email body is required.");
+
+  // Look up agent email if not provided
+  if (!toEmail) {
+    var agents = getAgents();
+    for (var i = 0; i < agents.length; i++) {
+      if ((agents[i]["Agent name"] || "").toLowerCase() === agentName.toLowerCase()) {
+        toEmail = agents[i]["Email"] || ""; break;
+      }
+    }
+  }
+  if (!toEmail) throw new Error("No email address found for " + agentName + ". Please add it in Manage Agents.");
+
+  GmailApp.sendEmail(toEmail, subject, body);
+  return { sent: true, to: toEmail };
 }
 
 // ============================================================

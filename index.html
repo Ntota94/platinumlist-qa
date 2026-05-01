@@ -696,10 +696,13 @@ textarea.email-body { font-family:'Consolas',monospace; font-size:.84rem; min-he
   <div id="coaching-out" class="d-none">
     <div class="mb-3"><label class="form-label fw-semibold">Subject</label><input type="text" id="ce-subject" class="form-control"/></div>
     <div class="mb-3"><label class="form-label fw-semibold">Email Body <span class="text-muted small">(editable before sending)</span></label><textarea id="ce-body" class="form-control email-body"></textarea></div>
-    <div class="d-flex gap-2 mb-2">
+    <div class="d-flex gap-2 mb-2 flex-wrap align-items-center">
       <button class="btn btn-outline-primary" onclick="copyEmail()"><i class="bi bi-clipboard me-1"></i>Copy</button>
       <button class="btn btn-outline-danger" onclick="openGmail()"><i class="bi bi-envelope me-1"></i>Open in Gmail</button>
+      <button class="btn btn-accent" id="btn-send-email" onclick="sendEmailDirect()"><i class="bi bi-send me-1"></i>Send Email</button>
+      <span id="ce-send-to" class="text-muted small"></span>
     </div>
+    <div id="send-email-result" class="small mt-1"></div>
     <div id="ce-sheetlink" class="small text-muted mt-1"></div>
     <div id="copy-ok" class="text-success small d-none mt-1"><i class="bi bi-check-circle me-1"></i>Copied!</div>
   </div>
@@ -2845,9 +2848,45 @@ function generateCoaching(){
     document.getElementById("ce-subject").value=r.subject;
     document.getElementById("ce-body").value=r.body;
     document.getElementById("coaching-out").classList.remove("d-none");
+    document.getElementById("send-email-result").innerHTML="";
+    var sendToEl=document.getElementById("ce-send-to");
+    var btn=document.getElementById("btn-send-email");
+    if(r.agent_email){
+      sendToEl.innerHTML='<i class="bi bi-envelope me-1"></i>To: <strong>'+r.agent_email+'</strong>';
+      btn.dataset.email=r.agent_email;
+      btn.disabled=false;
+    } else {
+      sendToEl.innerHTML='<span class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>No email on file — add it in Manage Agents</span>';
+      btn.dataset.email="";
+      btn.disabled=true;
+    }
     var lk=document.getElementById("ce-sheetlink");
     lk.innerHTML=r.summary&&r.summary.agent_sheet_link?'<i class="bi bi-table me-1"></i>Agent scorecard: <a href="'+r.summary.agent_sheet_link+'" target="_blank">Open</a>':"";
   }).catch(function(err){alert("Error: "+err.message);});
+}
+
+function sendEmailDirect(){
+  var btn=document.getElementById("btn-send-email");
+  var toEmail=btn.dataset.email||"";
+  var subject=document.getElementById("ce-subject").value.trim();
+  var body=document.getElementById("ce-body").value.trim();
+  var resultEl=document.getElementById("send-email-result");
+  if(!toEmail){alert("No recipient email address. Add the agent email in Manage Agents.");return;}
+  if(!subject||!body){alert("Subject and body cannot be empty.");return;}
+  if(!confirm("Send this email to "+toEmail+"?"))return;
+  btn.disabled=true;
+  btn.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Sending...';
+  resultEl.innerHTML='';
+  api("sendCoachingEmail",{to_email:toEmail,subject:subject,body:body})
+  .then(function(r){
+    btn.innerHTML='<i class="bi bi-send me-1"></i>Send Email';
+    btn.disabled=false;
+    resultEl.innerHTML='<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Email sent to <strong>'+r.to+'</strong></span>';
+  }).catch(function(err){
+    btn.innerHTML='<i class="bi bi-send me-1"></i>Send Email';
+    btn.disabled=false;
+    resultEl.innerHTML='<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Failed: '+err.message+'</span>';
+  });
 }
 
 function copyEmail(){
